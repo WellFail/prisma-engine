@@ -10,8 +10,17 @@ sql = ["sql-query-connector", "prisma-query"]
 graphql = ["graphql-parser"]
 
 [dependencies]
-actix-web = "0.7.19"
-actix = "0.7.5"
+tide = { git = "https://github.com/rustasync/tide" }
+tokio = "0.1"
+tokio-alpha = { package = "tokio", version = "0.2.0-alpha.4" }
+runtime = "0.3.0-alpha.7"
+runtime-tokio = "0.3.0-alpha.6"
+futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
+http = "0.1"
+hyper = "0.13.0-alpha.1"
+async-std = { path = "../../../async-std" }
+async-macros = "1.0"
+
 lazy_static = "1.3"
 logger = { path = "../../libs/logger" }
 prisma-inflector = { path = "../../libs/prisma-inflector" }
@@ -43,3 +52,6 @@ log = "0.4"
 
 [build-dependencies]
 rustc_version = "0.2.3"
+
+[dev-dependencies]
+migration-core = { path = "../../migration-engine/core" }

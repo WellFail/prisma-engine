@@ -14,6 +14,7 @@ pub struct GraphQlBody {
     variables: HashMap<String, String>,
 }
 
+#[derive(Clone, Copy)]
 pub struct GraphQlRequestHandler;
 
 #[allow(unused_variables)]
