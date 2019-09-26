@@ -1,5 +1,3 @@
-#![feature(test)]
-
 extern crate log;
 extern crate slog;
 #[macro_use]
@@ -8,7 +6,6 @@ extern crate slog_scope;
 extern crate rust_embed;
 #[macro_use]
 extern crate debug_stub_derive;
-extern crate test;
 
 mod cli;
 mod context;
@@ -31,7 +28,7 @@ use std::{env, error::Error, process};
 
 pub type PrismaResult<T> = Result<T, PrismaError>;
 
-#[runtime::main(runtime_tokio::Tokio)]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let matches = ClapApp::new("Prisma Query Engine")
         .version(env!("CARGO_PKG_VERSION"))

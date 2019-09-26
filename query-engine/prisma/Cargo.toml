@@ -11,10 +11,8 @@ graphql = ["graphql-parser"]
 
 [dependencies]
 tide = { git = "https://github.com/rustasync/tide" }
-tokio = "0.1"
-tokio-alpha = { package = "tokio", version = "0.2.0-alpha.4" }
-runtime = "0.3.0-alpha.7"
-runtime-tokio = "0.3.0-alpha.6"
+tokio = "0.2.0-alpha.5"
+tokio-executor = "0.2.0-alpha.5"
 futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
 http = "0.1"
 hyper = "0.13.0-alpha.1"

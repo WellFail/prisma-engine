@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod tests;
-
 use super::dmmf;
 use crate::{
     context::PrismaContext,
@@ -15,6 +12,7 @@ use tide::{error::ResultExt, response, App, Context, EndpointResult};
 use http::response::Response;
 use core::schema::QuerySchemaRenderer;
 use std::{sync::Arc, time::Instant};
+use tokio_executor::blocking;
 
 #[derive(RustEmbed)]
 #[folder = "query-engine/prisma/static_files"]
@@ -56,20 +54,22 @@ impl HttpServer {
     async fn http_handler(mut cx: Context<RequestContext>) -> EndpointResult {
         let body: GraphQlBody = cx.body_json().await.client_err()?;
 
-        let req = PrismaRequest {
-            body,
-            path: cx.uri().path().into(),
-            headers: cx
-                .headers()
-                .iter()
-                .map(|(k, v)| (format!("{}", k), v.to_str().unwrap().into()))
-                .collect(),
-        };
+        blocking::run(move || {
+            let req = PrismaRequest {
+                body,
+                path: cx.uri().path().into(),
+                headers: cx
+                    .headers()
+                    .iter()
+                    .map(|(k, v)| (format!("{}", k), v.to_str().unwrap().into()))
+                    .collect(),
+            };
 
-        let handler = cx.state().graphql_request_handler;
-        let result = handler.handle(req, &cx.state().context);
+            let handler = cx.state().graphql_request_handler;
+            let result = handler.handle(req, &cx.state().context);
 
-        Ok(response::json(result))
+            Ok(response::json(result))
+        }).await
     }
 
     async fn playground_handler(_: Context<RequestContext>) -> Response<Vec<u8>> {
