@@ -2,7 +2,7 @@ use crate::{query_builder::ManyRelatedRecordsWithRowNumber, FromSource, SqlCapab
 use datamodel::Source;
 use prisma_query::{
     ast::ParameterizedValue,
-    connector::{Queryable, SqliteParams},
+    connector::{self, SqliteParams, Queryable},
     pool::{sqlite::SqliteConnectionManager, PrismaConnectionManager},
 };
 use std::{collections::HashSet, convert::TryFrom};
@@ -51,22 +51,43 @@ impl SqlCapabilities for Sqlite {
     type ManyRelatedRecordsBuilder = ManyRelatedRecordsWithRowNumber;
 }
 
+impl Transaction for connector::Sqlite {}
+
 impl Transactional for Sqlite {
     fn with_transaction<F, T>(&self, db: &str, f: F) -> crate::Result<T>
     where
         F: FnOnce(&mut dyn Transaction) -> crate::Result<T>,
     {
-        let mut conn = self.pool.get()?;
+        self.with_connection(db, |ref mut conn| {
+            let result = {
+                let mut tx = conn.start_transaction()?;
+                let result = f(&mut tx);
 
+                if result.is_ok() {
+                    tx.commit()?;
+                }
+
+                result
+            };
+
+            result
+        })
+    }
+
+    fn with_connection<F, T>(&self, db: &str, f: F) -> crate::Result<T>
+    where
+        F: FnOnce(&mut dyn Transaction) -> crate::Result<T>,
+    {
+        let mut conn = self.pool.get()?;
         let databases: HashSet<String> = conn
             .query_raw("PRAGMA database_list", &[])?
-            .into_iter()
-            .map(|rr| {
-                let db_name = rr.into_iter().nth(1).unwrap();
+        .into_iter()
+        .map(|rr| {
+            let db_name = rr.into_iter().nth(1).unwrap();
 
-                db_name.into_string().unwrap()
-            })
-            .collect();
+            db_name.into_string().unwrap()
+        })
+        .collect();
 
         if !databases.contains(db) {
             // This is basically hacked until we have a full rust stack with a migration engine.
@@ -82,16 +103,7 @@ impl Transactional for Sqlite {
 
         conn.execute_raw("PRAGMA foreign_keys = ON", &[])?;
 
-        let result = {
-            let mut tx = conn.start_transaction()?;
-            let result = f(&mut tx);
-
-            if result.is_ok() {
-                tx.commit()?;
-            }
-
-            result
-        };
+        let result = f(&mut *conn);
 
         if self.test_mode {
             conn.execute_raw("DETACH DATABASE ?", &[ParameterizedValue::from(db)])?;

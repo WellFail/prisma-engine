@@ -1,7 +1,7 @@
 use crate::{query_builder::ManyRelatedRecordsWithUnionAll, FromSource, SqlCapabilities, Transaction, Transactional};
 use datamodel::Source;
 use prisma_query::{
-    connector::{MysqlParams, Queryable},
+    connector::{self, MysqlParams},
     pool::{mysql::MysqlConnectionManager, PrismaConnectionManager},
 };
 use std::convert::TryFrom;
@@ -27,20 +27,32 @@ impl SqlCapabilities for Mysql {
     type ManyRelatedRecordsBuilder = ManyRelatedRecordsWithUnionAll;
 }
 
+
+impl Transaction for connector::Mysql {}
+
 impl Transactional for Mysql {
-    fn with_transaction<F, T>(&self, _: &str, f: F) -> crate::Result<T>
+    fn with_transaction<F, T>(&self, db: &str, f: F) -> crate::Result<T>
+    where
+        F: FnOnce(&mut dyn Transaction) -> crate::Result<T>,
+    {
+        self.with_connection(db, |ref mut conn| {
+            let mut tx = conn.start_transaction()?;
+
+            let result = f(&mut tx);
+
+            if result.is_ok() {
+                tx.commit()?;
+            }
+
+            result
+        })
+    }
+
+    fn with_connection<F, T>(&self, _: &str, f: F) -> crate::Result<T>
     where
         F: FnOnce(&mut dyn Transaction) -> crate::Result<T>,
     {
         let mut conn = self.pool.get()?;
-        let mut tx = conn.start_transaction()?;
-
-        let result = f(&mut tx);
-
-        if result.is_ok() {
-            tx.commit()?;
-        }
-
-        result
+        f(&mut *conn)
     }
 }

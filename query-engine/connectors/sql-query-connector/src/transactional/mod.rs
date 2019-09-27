@@ -21,6 +21,10 @@ pub trait Transactional {
     fn with_transaction<F, T>(&self, db: &str, f: F) -> crate::Result<T>
     where
         F: FnOnce(&mut dyn Transaction) -> crate::Result<T>;
+
+    fn with_connection<F, T>(&self, db: &str, f: F) -> crate::Result<T>
+    where
+        F: FnOnce(&mut dyn Transaction) -> crate::Result<T>;
 }
 
 impl<'t> Transaction for connector::Transaction<'t> {}

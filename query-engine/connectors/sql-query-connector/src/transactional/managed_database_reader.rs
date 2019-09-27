@@ -31,7 +31,7 @@ where
 
         let record = self
             .executor
-            .with_transaction(db_name, |conn| match conn.find(query, idents.as_slice()) {
+            .with_connection(db_name, |conn| match conn.find(query, idents.as_slice()) {
                 Ok(result) => Ok(Some(result)),
                 Err(_e @ SqlError::RecordNotFoundForWhere(_)) => Ok(None),
                 Err(e) => Err(e),
@@ -58,7 +58,7 @@ where
 
         let records = self
             .executor
-            .with_transaction(db_name, |conn| conn.filter(query.into(), idents.as_slice()))?
+            .with_connection(db_name, |conn| conn.filter(query.into(), idents.as_slice()))?
             .into_iter()
             .map(Record::from)
             .collect();
@@ -90,7 +90,7 @@ where
 
         let records: connector_interface::Result<Vec<Record>> = self
             .executor
-            .with_transaction(db_name, |conn| conn.filter(query, idents.as_slice()))?
+            .with_connection(db_name, |conn| conn.filter(query, idents.as_slice()))?
             .into_iter()
             .map(|mut row| {
                 let parent_id = row.values.pop().ok_or(ConnectorError::ColumnDoesNotExist)?;
@@ -118,7 +118,7 @@ where
 
         let result = self
             .executor
-            .with_transaction(db_name, |conn| conn.find_int(query))
+            .with_connection(db_name, |conn| conn.find_int(query))
             .map(|count| count as usize)?;
 
         Ok(result)
@@ -129,7 +129,7 @@ where
 
         let result = self
             .executor
-            .with_transaction(database, |conn| conn.find_int(query))
+            .with_connection(database, |conn| conn.find_int(query))
             .map(|count| count as usize)?;
 
         Ok(result)
@@ -144,7 +144,7 @@ where
         let type_identifier = list_field.type_identifier;
         let query = ReadQueryBuilder::get_scalar_list_values_by_record_ids(list_field, record_ids);
 
-        let results: Vec<ScalarListElement> = self.executor.with_transaction(db_name, |conn| {
+        let results: Vec<ScalarListElement> = self.executor.with_connection(db_name, |conn| {
             let rows = conn.filter(query.into(), &[TypeIdentifier::GraphQLID, type_identifier])?;
 
             rows.into_iter()
