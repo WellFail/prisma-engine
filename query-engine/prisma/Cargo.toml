@@ -10,12 +10,11 @@ sql = ["sql-query-connector", "prisma-query"]
 graphql = ["graphql-parser"]
 
 [dependencies]
-tide = { git = "https://github.com/rustasync/tide" }
 tokio = "0.2.0-alpha.5"
 tokio-executor = "0.2.0-alpha.5"
 futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
 http = "0.1"
-hyper = "0.13.0-alpha.1"
+hyper = { version = "0.13.0-alpha.2", features = ["unstable-stream"] }
 async-std = { path = "../../../async-std" }
 async-macros = "1.0"
 

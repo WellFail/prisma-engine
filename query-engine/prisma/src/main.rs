@@ -21,7 +21,6 @@ mod utilities;
 use clap::{App as ClapApp, Arg, SubCommand};
 use cli::*;
 use error::*;
-use logger::Logger;
 use request_handlers::{PrismaRequest, RequestHandler};
 use server::HttpServer;
 use std::{env, error::Error, process};
@@ -89,7 +88,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             }
         }
     } else {
-        let _logger = Logger::build("prisma"); // keep in scope
+        // let _logger = Logger::build("prisma"); // out from the scope until finding faster logger
 
         let port = matches
             .value_of("port")
@@ -98,7 +97,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             .and_then(|p| p.parse::<u16>().ok())
             .unwrap_or_else(|| 4466);
 
-        let address = ("0.0.0.0", port);
+        let address = ([0, 0, 0, 0], port);
         let legacy = matches.is_present("legacy");
 
         if let Err(err) = HttpServer::run(address, legacy).await {
