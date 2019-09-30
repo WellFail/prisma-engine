@@ -23,12 +23,12 @@ use cli::*;
 use error::*;
 use request_handlers::{PrismaRequest, RequestHandler};
 use server::HttpServer;
-use std::{env, error::Error, process};
+use std::{env, error::Error, process, time::Duration};
+use tokio::runtime::Builder;
 
 pub type PrismaResult<T> = Result<T, PrismaError>;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let matches = ClapApp::new("Prisma Query Engine")
         .version(env!("CARGO_PKG_VERSION"))
         .arg(
@@ -100,7 +100,14 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let address = ([0, 0, 0, 0], port);
         let legacy = matches.is_present("legacy");
 
-        if let Err(err) = HttpServer::run(address, legacy).await {
+        let rt = Builder::new()
+            .blocking_threads(300)
+            .keep_alive(Some(Duration::from_secs(32768)))
+            .build()?;
+
+        let result = rt.block_on(async { HttpServer::run(address, legacy).await });
+
+        if let Err(err) = result {
             info!("Encountered error during initialization:");
             err.pretty_print();
             process::exit(1);
