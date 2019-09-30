@@ -101,8 +101,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let legacy = matches.is_present("legacy");
 
         let rt = Builder::new()
-            .blocking_threads(300)
-            .keep_alive(Some(Duration::from_secs(32768)))
+            .blocking_threads(32768)
             .build()?;
 
         let result = rt.block_on(async { HttpServer::run(address, legacy).await });
