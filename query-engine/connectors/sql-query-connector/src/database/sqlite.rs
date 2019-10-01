@@ -61,9 +61,8 @@ impl Transactional for Sqlite {
         let mut f_cell = Some(f);
 
         let fut = poll_fn(move |_| {
-            let f = f_cell.take().unwrap();
-
             blocking(|| {
+                let f = f_cell.take().unwrap();
                 let mut conn = pool.get()?;
 
                 conn.attach_database(db.as_str())?;
@@ -99,9 +98,8 @@ impl Transactional for Sqlite {
         let mut f_cell = Some(f);
 
         let fut = poll_fn(move |_| {
-            let f = f_cell.take().unwrap();
-
             blocking(|| {
+                let f = f_cell.take().unwrap();
                 let mut conn = pool.get()?;
 
                 conn.attach_database(db.as_str())?;

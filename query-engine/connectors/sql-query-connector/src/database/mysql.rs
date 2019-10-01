@@ -42,9 +42,9 @@ impl Transactional for Mysql {
         let mut f_cell = Some(f);
 
         let fut = poll_fn(move |_| {
-            let f = f_cell.take().unwrap();
-
             blocking(|| {
+                let f = f_cell.take().unwrap();
+
                 let mut conn = pool.get()?;
                 let mut tx = conn.start_transaction()?;
                 let result = f(&mut tx);
@@ -75,9 +75,8 @@ impl Transactional for Mysql {
         let mut f_cell = Some(f);
 
         let fut = poll_fn(move |_| {
-            let f = f_cell.take().unwrap();
-
             blocking(|| {
+                let f = f_cell.take().unwrap();
                 let mut conn = pool.get()?;
 
                 f(&mut *conn)
