@@ -7,7 +7,7 @@ use prisma_query::ast::*;
 pub struct ManyRelatedRecordsWithUnionAll;
 
 impl ManyRelatedRecordsQueryBuilder for ManyRelatedRecordsWithUnionAll {
-    fn with_pagination<'a>(base: ManyRelatedRecordsBaseQuery<'a>) -> Query {
+    fn with_pagination(base: ManyRelatedRecordsBaseQuery) -> Query<'static> {
         let distinct_ids = {
             let mut ids = base.from_record_ids.to_vec();
             ids.dedup();

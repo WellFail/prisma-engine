@@ -6,11 +6,14 @@ pub use graphql::{GraphQlBody, GraphQlRequestHandler};
 use crate::{context::PrismaContext};
 use serde_json;
 use std::collections::HashMap;
+use futures::future::BoxFuture;
 
 pub trait RequestHandler {
     type Body;
 
-    fn handle<S: Into<PrismaRequest<Self::Body>>>(&self, req: S, ctx: &PrismaContext) -> serde_json::Value;
+    fn handle<'a, S>(&'a self, req: S, ctx: &'a PrismaContext) -> BoxFuture<'a, serde_json::Value>
+    where
+        S: Into<PrismaRequest<Self::Body>> + Send + Sync + 'static;
 }
 
 pub struct PrismaRequest<T> {

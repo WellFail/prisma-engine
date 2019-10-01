@@ -15,33 +15,34 @@ use crate::{
 use connector_interface::{self, result_ast::*, write_ast::*, UnmanagedDatabaseWriter};
 use serde_json::Value;
 use std::sync::Arc;
+use futures::future::{BoxFuture, FutureExt};
 
 impl<T> UnmanagedDatabaseWriter for SqlDatabase<T>
 where
-    T: Transactional + SqlCapabilities,
+    T: Transactional + SqlCapabilities + Send + Sync + 'static,
 {
-    fn execute(&self, db_name: String, write_query: RootWriteQuery) -> connector_interface::Result<WriteQueryResult> {
-        let result = self.executor.with_transaction(&db_name, |conn| {
-            fn create(conn: &mut dyn Transaction, cn: &CreateRecord) -> crate::Result<WriteQueryResult> {
-                let parent_id = create::execute(conn, Arc::clone(&cn.model), &cn.non_list_args, &cn.list_args)?;
-                nested::execute(conn, &cn.nested_writes, &parent_id)?;
+    fn execute(&self, db_name: String, write_query: RootWriteQuery) -> BoxFuture<'static, connector_interface::Result<WriteQueryResult>> {
+        fn create(conn: &mut dyn Transaction, cn: &CreateRecord) -> crate::Result<WriteQueryResult> {
+            let parent_id = create::execute(conn, Arc::clone(&cn.model), &cn.non_list_args, &cn.list_args)?;
+            nested::execute(conn, &cn.nested_writes, &parent_id)?;
 
-                Ok(WriteQueryResult {
-                    identifier: Identifier::Id(parent_id),
-                    typ: WriteQueryResultType::Create,
-                })
-            }
+            Ok(WriteQueryResult {
+                identifier: Identifier::Id(parent_id),
+                typ: WriteQueryResultType::Create,
+            })
+        }
 
-            fn update(conn: &mut dyn Transaction, un: &UpdateRecord) -> crate::Result<WriteQueryResult> {
-                let parent_id = update::execute(conn, &un.where_, &un.non_list_args, &un.list_args)?;
-                nested::execute(conn, &un.nested_writes, &parent_id)?;
+        fn update(conn: &mut dyn Transaction, un: &UpdateRecord) -> crate::Result<WriteQueryResult> {
+            let parent_id = update::execute(conn, &un.where_, &un.non_list_args, &un.list_args)?;
+            nested::execute(conn, &un.nested_writes, &parent_id)?;
 
-                Ok(WriteQueryResult {
-                    identifier: Identifier::Id(parent_id),
-                    typ: WriteQueryResultType::Update,
-                })
-            }
+            Ok(WriteQueryResult {
+                identifier: Identifier::Id(parent_id),
+                typ: WriteQueryResultType::Update,
+            })
+        }
 
+        let fut = self.executor.with_transaction(&db_name, move |conn| {
             match write_query {
                 RootWriteQuery::CreateRecord(ref cn) => Ok(create(conn, cn)?),
                 RootWriteQuery::UpdateRecord(ref un) => Ok(update(conn, un)?),
@@ -90,16 +91,16 @@ where
                     })
                 }
             }
-        })?;
+        });
 
-        Ok(result)
+        async move { Ok(fut.await?) }.boxed()
     }
 
-    fn execute_raw(&self, db_name: String, query: String) -> connector_interface::Result<Value> {
-        let result = self
+    fn execute_raw(&self, db_name: String, query: String) -> BoxFuture<'static, connector_interface::Result<Value>> {
+        let fut = self
             .executor
-            .with_transaction(&db_name, |conn| conn.raw_json(RawQuery::from(query)))?;
+            .with_transaction(&db_name, |conn| conn.raw_json(RawQuery::from(query)));
 
-        Ok(result)
+        async move { Ok(fut.await?) }.boxed()
     }
 }

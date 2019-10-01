@@ -25,14 +25,14 @@ pub trait SqlCapabilities {
 /// needed traits.
 pub struct SqlDatabase<T>
 where
-    T: Transactional + SqlCapabilities,
+    T: Transactional + SqlCapabilities + Send + Sync + 'static,
 {
     pub executor: T,
 }
 
 impl<T> SqlDatabase<T>
 where
-    T: Transactional + SqlCapabilities,
+    T: Transactional + SqlCapabilities + Send + Sync + 'static,
 {
     pub fn new(executor: T) -> Self {
         Self { executor }

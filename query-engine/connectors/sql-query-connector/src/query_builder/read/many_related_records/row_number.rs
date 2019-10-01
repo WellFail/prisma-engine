@@ -6,7 +6,7 @@ use prisma_query::ast::{row_number, Aliasable, Comparable, Conjuctive, Function,
 pub struct ManyRelatedRecordsWithRowNumber;
 
 impl ManyRelatedRecordsQueryBuilder for ManyRelatedRecordsWithRowNumber {
-    fn with_pagination<'a>(base: ManyRelatedRecordsBaseQuery<'a>) -> Query {
+    fn with_pagination(base: ManyRelatedRecordsBaseQuery) -> Query<'static> {
         let conditions = base
             .from_field
             .relation_column()

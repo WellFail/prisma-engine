@@ -9,11 +9,12 @@ pub struct WriteQueryExecutor {
 }
 
 impl WriteQueryExecutor {
-    pub fn execute(&self, write_query: WriteQuery) -> CoreResult<WriteQueryResultWrapper> {
+    pub async fn execute(&self, write_query: WriteQuery) -> CoreResult<WriteQueryResultWrapper> {
         match write_query {
             WriteQuery::Root(name, alias, wq) => self
                 .write_executor
                 .execute(self.db_name.clone(), wq)
+                .await
                 .map_err(|err| err.into())
                 .map(|result| WriteQueryResultWrapper { name, alias, result }),
 

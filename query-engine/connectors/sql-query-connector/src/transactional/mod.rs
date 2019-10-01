@@ -9,6 +9,7 @@ use connector_interface::{
     error::RecordFinderInfo,
     filter::{Filter, RecordFinder},
 };
+use futures::future::BoxFuture;
 use prisma_models::*;
 use prisma_query::{
     ast::*,
@@ -18,13 +19,15 @@ use serde_json::{Map, Number, Value};
 use std::{convert::TryFrom, sync::Arc};
 
 pub trait Transactional {
-    fn with_transaction<F, T>(&self, db: &str, f: F) -> crate::Result<T>
+    fn with_transaction<F, T>(&self, db: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
     where
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T>;
+        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
+        T: Send + Sync + 'static;
 
-    fn with_connection<F, T>(&self, db: &str, f: F) -> crate::Result<T>
+    fn with_connection<F, T>(&self, db: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
     where
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T>;
+        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
+        T: Send + Sync + 'static;
 }
 
 impl<'t> Transaction for connector::Transaction<'t> {}

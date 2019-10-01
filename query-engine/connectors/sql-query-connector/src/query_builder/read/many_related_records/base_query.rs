@@ -4,10 +4,10 @@ use prisma_models::prelude::*;
 use prisma_query::ast::{Aliasable, Comparable, ConditionTree, Joinable, Select};
 use std::sync::Arc;
 
-pub struct ManyRelatedRecordsBaseQuery<'a> {
+pub struct ManyRelatedRecordsBaseQuery {
     pub from_field: Arc<RelationField>,
-    pub selected_fields: &'a SelectedFields,
-    pub from_record_ids: &'a [GraphqlId],
+    pub selected_fields: SelectedFields,
+    pub from_record_ids: Vec<GraphqlId>,
     pub query: Select<'static>,
     pub order_by: Option<OrderBy>,
     pub is_reverse_order: bool,
@@ -17,13 +17,13 @@ pub struct ManyRelatedRecordsBaseQuery<'a> {
     pub skip_and_limit: SkipAndLimit,
 }
 
-impl<'a> ManyRelatedRecordsBaseQuery<'a> {
+impl ManyRelatedRecordsBaseQuery {
     pub fn new(
         from_field: Arc<RelationField>,
-        from_record_ids: &'a [GraphqlId],
+        from_record_ids: Vec<GraphqlId>,
         query_arguments: QueryArguments,
-        selected_fields: &'a SelectedFields,
-    ) -> ManyRelatedRecordsBaseQuery<'a> {
+        selected_fields: SelectedFields,
+    ) -> Self {
         let cursor = CursorCondition::build(&query_arguments, from_field.related_model());
         let window_limits = query_arguments.window_limits();
         let skip_and_limit = query_arguments.skip_and_limit();

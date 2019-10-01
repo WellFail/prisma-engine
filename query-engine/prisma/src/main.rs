@@ -23,7 +23,7 @@ use cli::*;
 use error::*;
 use request_handlers::{PrismaRequest, RequestHandler};
 use server::HttpServer;
-use std::{env, error::Error, process, time::Duration};
+use std::{env, error::Error, process};
 use tokio::runtime::Builder;
 
 pub type PrismaResult<T> = Result<T, PrismaError>;
@@ -89,6 +89,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         }
     } else {
         // let _logger = Logger::build("prisma"); // out from the scope until finding faster logger
+        pretty_env_logger::init();
 
         let port = matches
             .value_of("port")
@@ -101,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let legacy = matches.is_present("legacy");
 
         let rt = Builder::new()
-            .blocking_threads(32768)
+            .blocking_threads(300)
             .build()?;
 
         let result = rt.block_on(async { HttpServer::run(address, legacy).await });

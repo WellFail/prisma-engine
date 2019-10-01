@@ -11,10 +11,9 @@ use serde_json::json;
 use hyper::{Body, Error, Method, Request, Response, Server, StatusCode};
 use hyper::header;
 use hyper::service::{make_service_fn, service_fn};
-use futures::stream::{TryStreamExt};
+use futures::stream::TryStreamExt;
 use core::schema::QuerySchemaRenderer;
 use std::{sync::Arc, time::Instant};
-use tokio_executor::blocking;
 
 #[derive(RustEmbed)]
 #[folder = "query-engine/prisma/static_files"]
@@ -104,16 +103,14 @@ impl HttpServer {
     }
 
     async fn http_handler(req: PrismaRequest<GraphQlBody>, cx: Arc<RequestContext>) -> Response<Body> {
-        blocking::run(move || {
-            let result = cx.graphql_request_handler.handle(req, &cx.context);
-            let bytes = serde_json::to_vec(&result).unwrap();
+        let result = cx.graphql_request_handler.handle(req, &cx.context).await;
+        let bytes = serde_json::to_vec(&result).unwrap();
 
-            Response::builder()
-                .status(StatusCode::OK)
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(bytes))
-                .unwrap()
-        }).await
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(bytes))
+            .unwrap()
     }
 
     fn status_handler() -> Response<Body> {

@@ -15,9 +15,9 @@ pub trait ManyRelatedRecordsQueryBuilder {
     const ROW_NUMBER_ALIAS: &'static str = "prismaRowNumberAlias";
     const ROW_NUMBER_TABLE_ALIAS: &'static str = "prismaRowNumberTableAlias";
 
-    fn with_pagination<'a>(base: ManyRelatedRecordsBaseQuery<'a>) -> Query;
+    fn with_pagination(base: ManyRelatedRecordsBaseQuery) -> Query<'static>;
 
-    fn without_pagination<'a>(base: ManyRelatedRecordsBaseQuery<'a>) -> Query {
+    fn without_pagination(base: ManyRelatedRecordsBaseQuery) -> Query<'static> {
         let conditions = base
             .from_field
             .relation_column()

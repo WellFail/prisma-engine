@@ -9,6 +9,7 @@ use connector_interface::{self, error::ConnectorError, filter::RecordFinder, *};
 use itertools::Itertools;
 use prisma_models::*;
 use std::convert::TryFrom;
+use futures::future::{BoxFuture, FutureExt};
 
 struct ScalarListElement {
     record_id: GraphqlId,
@@ -17,32 +18,36 @@ struct ScalarListElement {
 
 impl<T> ManagedDatabaseReader for SqlDatabase<T>
 where
-    T: Transactional + SqlCapabilities,
+    T: Transactional + SqlCapabilities + Send + Sync + 'static,
 {
     fn get_single_record(
         &self,
         record_finder: &RecordFinder,
         selected_fields: &SelectedFields,
-    ) -> connector_interface::Result<Option<SingleRecord>> {
+    ) -> BoxFuture<'static, connector_interface::Result<Option<SingleRecord>>> {
         let db_name = &record_finder.field.model().internal_data_model().db_name;
         let query = ReadQueryBuilder::get_records(record_finder.field.model(), selected_fields, record_finder);
         let field_names = selected_fields.names();
         let idents = selected_fields.type_identifiers();
 
-        let record = self
+        let fut = self
             .executor
-            .with_connection(db_name, |conn| match conn.find(query, idents.as_slice()) {
+            .with_connection(db_name, move |conn| match conn.find(query, idents.as_slice()) {
                 Ok(result) => Ok(Some(result)),
                 Err(_e @ SqlError::RecordNotFoundForWhere(_)) => Ok(None),
                 Err(e) => Err(e),
-            })?
-            .map(Record::from)
-            .map(|record| SingleRecord {
-                record,
-                field_names,
             });
 
-        Ok(record)
+        async move {
+            let result = fut.await?
+                .map(Record::from)
+                .map(|record| SingleRecord {
+                    record,
+                    field_names,
+                });
+
+            Ok(result)
+        }.boxed()
     }
 
     fn get_many_records(
@@ -50,20 +55,25 @@ where
         model: ModelRef,
         query_arguments: QueryArguments,
         selected_fields: &SelectedFields,
-    ) -> connector_interface::Result<ManyRecords> {
+    ) -> BoxFuture<'static, connector_interface::Result<ManyRecords>> {
         let db_name = &model.internal_data_model().db_name;
         let field_names = selected_fields.names();
         let idents = selected_fields.type_identifiers();
         let query = ReadQueryBuilder::get_records(model, selected_fields, query_arguments);
 
-        let records = self
+        let fut = self
             .executor
-            .with_connection(db_name, |conn| conn.filter(query.into(), idents.as_slice()))?
-            .into_iter()
-            .map(Record::from)
-            .collect();
+            .with_connection(db_name, move |conn| conn.filter(query.into(), idents.as_slice()));
 
-        Ok(ManyRecords { records, field_names })
+        async move {
+            let records = fut
+                .await?
+                .into_iter()
+                .map(Record::from)
+                .collect();
+
+            Ok(ManyRecords { records, field_names })
+        }.boxed()
     }
 
     fn get_related_records(
@@ -72,14 +82,14 @@ where
         from_record_ids: &[GraphqlId],
         query_arguments: QueryArguments,
         selected_fields: &SelectedFields,
-    ) -> connector_interface::Result<ManyRecords> {
+    ) -> BoxFuture<'static, connector_interface::Result<ManyRecords>> {
         let db_name = &from_field.model().internal_data_model().db_name;
         let idents = selected_fields.type_identifiers();
         let field_names = selected_fields.names();
 
         let query = {
             let is_with_pagination = query_arguments.is_with_pagination();
-            let base = ManyRelatedRecordsBaseQuery::new(from_field, from_record_ids, query_arguments, selected_fields);
+            let base = ManyRelatedRecordsBaseQuery::new(from_field, from_record_ids.to_vec(), query_arguments, selected_fields.clone());
 
             if is_with_pagination {
                 T::ManyRelatedRecordsBuilder::with_pagination(base)
@@ -88,63 +98,58 @@ where
             }
         };
 
-        let records: connector_interface::Result<Vec<Record>> = self
-            .executor
-            .with_connection(db_name, |conn| conn.filter(query, idents.as_slice()))?
-            .into_iter()
-            .map(|mut row| {
-                let parent_id = row.values.pop().ok_or(ConnectorError::ColumnDoesNotExist)?;
+        let fut = self.executor.with_connection(db_name, move |conn| conn.filter(query, idents.as_slice()));
 
-                // Relation id is always the second last value. We don't need it
-                // here and we don't need it in the record.
-                let _ = row.values.pop();
+        async move {
+            let records: connector_interface::Result<Vec<Record>> = fut
+                .await?
+                .into_iter()
+                .map(|mut row| {
+                    let parent_id = row.values.pop().ok_or(ConnectorError::ColumnDoesNotExist)?;
 
-                let mut record = Record::from(row);
-                record.add_parent_id(GraphqlId::try_from(parent_id)?);
+                    // Relation id is always the second last value. We don't need it
+                    // here and we don't need it in the record.
+                    let _ = row.values.pop();
 
-                Ok(record)
+                    let mut record = Record::from(row);
+                    record.add_parent_id(GraphqlId::try_from(parent_id)?);
+
+                    Ok(record)
+                })
+                .collect();
+
+            Ok(ManyRecords {
+                records: records?,
+                field_names,
             })
-            .collect();
-
-        Ok(ManyRecords {
-            records: records?,
-            field_names,
-        })
+        }.boxed()
     }
 
-    fn count_by_model(&self, model: ModelRef, query_arguments: QueryArguments) -> connector_interface::Result<usize> {
+    fn count_by_model(&self, model: ModelRef, query_arguments: QueryArguments) -> BoxFuture<'static, connector_interface::Result<usize>> {
         let db_name = &model.internal_data_model().db_name;
         let query = ReadQueryBuilder::count_by_model(model, query_arguments);
 
-        let result = self
-            .executor
-            .with_connection(db_name, |conn| conn.find_int(query))
-            .map(|count| count as usize)?;
-
-        Ok(result)
+        let fut = self.executor.with_connection(db_name, |conn| conn.find_int(query));
+        async move { Ok(fut.await.map(|count| count as usize)?) }.boxed()
     }
 
-    fn count_by_table(&self, database: &str, table: &str) -> connector_interface::Result<usize> {
+    fn count_by_table(&self, database: &str, table: &str) -> BoxFuture<'static, connector_interface::Result<usize>> {
         let query = ReadQueryBuilder::count_by_table(database, table);
 
-        let result = self
-            .executor
-            .with_connection(database, |conn| conn.find_int(query))
-            .map(|count| count as usize)?;
-
-        Ok(result)
+        let fut = self.executor.with_connection(database, |conn| conn.find_int(query));
+        async move { Ok(fut.await.map(|count| count as usize)?) }.boxed()
     }
 
     fn get_scalar_list_values_by_record_ids(
         &self,
         list_field: ScalarFieldRef,
         record_ids: Vec<GraphqlId>,
-    ) -> connector_interface::Result<Vec<ScalarListValues>> {
+    ) -> BoxFuture<'static, connector_interface::Result<Vec<ScalarListValues>>> {
         let db_name = &list_field.model().internal_data_model().db_name;
         let type_identifier = list_field.type_identifier;
         let query = ReadQueryBuilder::get_scalar_list_values_by_record_ids(list_field, record_ids);
 
-        let results: Vec<ScalarListElement> = self.executor.with_connection(db_name, |conn| {
+        let fut = self.executor.with_connection(db_name, move |conn| {
             let rows = conn.filter(query.into(), &[TypeIdentifier::GraphQLID, type_identifier])?;
 
             rows.into_iter()
@@ -160,18 +165,22 @@ where
                     })
                 })
                 .collect()
-        })?;
+        });
 
-        let mut list_values = Vec::new();
+        async {
+            let results: Vec<ScalarListElement> = fut.await?;
+            let mut list_values = Vec::new();
 
-        for (record_id, elements) in &results.into_iter().group_by(|ele| ele.record_id.clone()) {
-            let values = ScalarListValues {
-                record_id,
-                values: elements.into_iter().map(|e| e.value).collect(),
-            };
-            list_values.push(values);
-        }
+            for (record_id, elements) in &results.into_iter().group_by(|ele| ele.record_id.clone()) {
+                let values = ScalarListValues {
+                    record_id,
+                    values: elements.into_iter().map(|e| e.value).collect(),
+                };
 
-        Ok(list_values)
+                list_values.push(values);
+            }
+
+            Ok(list_values)
+        }.boxed()
     }
 }

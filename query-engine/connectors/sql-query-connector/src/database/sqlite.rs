@@ -1,28 +1,27 @@
 use crate::{query_builder::ManyRelatedRecordsWithRowNumber, FromSource, SqlCapabilities, Transaction, Transactional};
+use tokio_executor::threadpool::blocking;
+use futures::future::{FutureExt, ok, err, BoxFuture, poll_fn};
 use datamodel::Source;
 use prisma_query::{
-    ast::ParameterizedValue,
     connector::{self, SqliteParams, Queryable},
     pool::{sqlite::SqliteConnectionManager, PrismaConnectionManager},
 };
-use std::{collections::HashSet, convert::TryFrom};
+use std::convert::TryFrom;
 
 type Pool = r2d2::Pool<PrismaConnectionManager<SqliteConnectionManager>>;
 
 pub struct Sqlite {
     pool: Pool,
-    test_mode: bool,
     file_path: String,
 }
 
 impl Sqlite {
-    pub fn new(file_path: String, connection_limit: u32, test_mode: bool) -> crate::Result<Self> {
+    pub fn new(file_path: String, connection_limit: u32) -> crate::Result<Self> {
         let manager = PrismaConnectionManager::sqlite(None, &file_path)?;
         let pool = r2d2::Pool::builder().max_size(connection_limit).build(manager)?;
 
         Ok(Self {
             pool,
-            test_mode,
             file_path,
         })
     }
@@ -35,13 +34,11 @@ impl Sqlite {
 impl FromSource for Sqlite {
     fn from_source(source: &dyn Source) -> crate::Result<Self> {
         let params = SqliteParams::try_from(source.url().value.as_str())?;
-
         let file_path = params.file_path.clone();
         let pool = r2d2::Pool::try_from(params).unwrap();
 
         Ok(Sqlite {
             pool,
-            test_mode: false,
             file_path: file_path.to_str().unwrap().to_string(),
         })
     }
@@ -54,12 +51,24 @@ impl SqlCapabilities for Sqlite {
 impl Transaction for connector::Sqlite {}
 
 impl Transactional for Sqlite {
-    fn with_transaction<F, T>(&self, db: &str, f: F) -> crate::Result<T>
+    fn with_transaction<F, T>(&self, db: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
     where
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T>,
+        T: Send + Sync + 'static,
+        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
     {
-        self.with_connection(db, |ref mut conn| {
-            let result = {
+        let pool = self.pool.clone();
+        let db = db.to_string();
+        let mut f_cell = Some(f);
+
+        let fut = poll_fn(move |_| {
+            let f = f_cell.take().unwrap();
+
+            blocking(|| {
+                let mut conn = pool.get()?;
+
+                conn.attach_database(db.as_str())?;
+                conn.execute_raw("PRAGMA foreign_keys = ON", &[])?;
+
                 let mut tx = conn.start_transaction()?;
                 let result = f(&mut tx);
 
@@ -68,47 +77,48 @@ impl Transactional for Sqlite {
                 }
 
                 result
-            };
+            })
+        }).then(|res| {
+            match res {
+                Ok(Ok(results)) => ok(results),
+                Ok(Err(query_err)) => err(query_err),
+                Err(blocking_err) => err(blocking_err.into())
+            }
+        });
 
-            result
-        })
+        fut.boxed()
     }
 
-    fn with_connection<F, T>(&self, db: &str, f: F) -> crate::Result<T>
+    fn with_connection<F, T>(&self, db: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
     where
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T>,
+        T: Send + Sync + 'static,
+        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
     {
-        let mut conn = self.pool.get()?;
-        let databases: HashSet<String> = conn
-            .query_raw("PRAGMA database_list", &[])?
-        .into_iter()
-        .map(|rr| {
-            let db_name = rr.into_iter().nth(1).unwrap();
+        let pool = self.pool.clone();
+        let db = db.to_string();
+        let mut f_cell = Some(f);
 
-            db_name.into_string().unwrap()
-        })
-        .collect();
+        let fut = poll_fn(move |_| {
+            let f = f_cell.take().unwrap();
 
-        if !databases.contains(db) {
-            // This is basically hacked until we have a full rust stack with a migration engine.
-            // Currently, the scala tests use the JNA library to write to the database.
-            conn.execute_raw(
-                "ATTACH DATABASE ? AS ?",
-                &[
-                    ParameterizedValue::from(self.file_path.as_ref()),
-                    ParameterizedValue::from(db),
-                ],
-            )?;
-        }
+            blocking(|| {
+                let mut conn = pool.get()?;
 
-        conn.execute_raw("PRAGMA foreign_keys = ON", &[])?;
+                conn.attach_database(db.as_str())?;
+                conn.execute_raw("PRAGMA foreign_keys = ON", &[])?;
 
-        let result = f(&mut *conn);
+                let result = f(&mut *conn);
 
-        if self.test_mode {
-            conn.execute_raw("DETACH DATABASE ?", &[ParameterizedValue::from(db)])?;
-        }
+                result
+            })
+        }).then(|res| {
+            match res {
+                Ok(Ok(results)) => ok(results),
+                Ok(Err(query_err)) => err(query_err),
+                Err(blocking_err) => err(blocking_err.into())
+            }
+        });
 
-        result
+        fut.boxed()
     }
 }
