@@ -101,7 +101,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let address = ([0, 0, 0, 0], port);
         let legacy = matches.is_present("legacy");
 
-        let rt = Builder::new().build()?;
+        let rt = Builder::new().blocking_threads(num_cpus::get_physical() * 2 + 1).build()?;
         let result = rt.block_on(async { HttpServer::run(address, legacy).await });
 
         if let Err(err) = result {
