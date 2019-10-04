@@ -1,3 +1,6 @@
+#[global_allocator]
+static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
+
 extern crate log;
 extern crate slog;
 #[macro_use]
