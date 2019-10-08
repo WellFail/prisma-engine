@@ -1,10 +1,16 @@
-#![deny(warnings)]
+use tracing_log::LogTracer;
+use tracing::subscriber;
+use tracing_subscriber::{FmtSubscriber, EnvFilter};
+use std::error::Error;
 
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_scope;
+pub fn init() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    LogTracer::init()?;
 
-mod logger;
+    let subscriber = FmtSubscriber::builder()
+        .with_env_filter(EnvFilter::from_default_env())
+        .finish();
 
-pub use self::logger::*;
+    subscriber::set_global_default(subscriber)?;
+
+    Ok(())
+}
