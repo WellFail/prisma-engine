@@ -19,17 +19,34 @@ mod utilities;
 use clap::{App as ClapApp, Arg, SubCommand};
 use cli::*;
 use error::*;
+use lazy_static::lazy_static;
 use request_handlers::{PrismaRequest, RequestHandler};
 use server::HttpServer;
 use std::{env, error::Error, process};
 use tokio::runtime::Builder;
-use tracing_log::LogTracer;
 use tracing::subscriber;
-use tracing_subscriber::{FmtSubscriber, EnvFilter};
+use tracing_log::LogTracer;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum LogFormat {
+    Text,
+    Json,
+}
+
+lazy_static! {
+    pub static ref LOG_FORMAT: LogFormat = {
+        match std::env::var("RUST_LOG_FORMAT").as_ref().map(|s| s.as_str()) {
+            Ok("devel") => LogFormat::Text,
+            _ => LogFormat::Json,
+        }
+    };
+}
 
 pub type PrismaResult<T> = Result<T, PrismaError>;
+type AnyError = Box<dyn Error + Send + Sync + 'static>;
 
-fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+fn main() -> Result<(), AnyError> {
     let matches = ClapApp::new("Prisma Query Engine")
         .version(env!("CARGO_PKG_VERSION"))
         .arg(
@@ -89,15 +106,7 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             }
         }
     } else {
-        LogTracer::init()?;
-
-        let subscriber = FmtSubscriber::builder()
-            .with_env_filter(EnvFilter::from_default_env())
-            .finish();
-
-        subscriber::set_global_default(subscriber)?;
-
-        error!("LOL");
+        init_logger()?;
 
         let port = matches
             .value_of("port")
@@ -118,6 +127,56 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             process::exit(1);
         };
     };
+
+    Ok(())
+}
+
+fn init_logger() -> Result<(), AnyError> {
+    LogTracer::init()?;
+
+    match *LOG_FORMAT {
+        LogFormat::Text => {
+            let subscriber = FmtSubscriber::builder()
+                .with_env_filter(EnvFilter::from_default_env())
+                .finish();
+
+            subscriber::set_global_default(subscriber)?;
+        }
+        LogFormat::Json => {
+            let subscriber = FmtSubscriber::builder()
+                .json()
+                .with_env_filter(EnvFilter::from_default_env())
+                .finish();
+
+            subscriber::set_global_default(subscriber)?;
+
+            std::panic::set_hook(Box::new(|info| {
+                let payload = info
+                    .payload()
+                    .downcast_ref::<String>()
+                    .map(Clone::clone)
+                    .unwrap_or_else(|| info.payload().downcast_ref::<&str>().unwrap().to_string());
+
+                match info.location() {
+                    Some(location) => {
+                        tracing::event!(
+                            tracing::Level::ERROR,
+                            message = "PANIC",
+                            reason = payload.as_str(),
+                            file = location.file(),
+                            line = location.line(),
+                            column = location.column(),
+                        );
+                    }
+                    None => {
+                        tracing::event!(tracing::Level::ERROR, message = "PANIC", reason = payload.as_str());
+                    }
+                }
+
+                std::process::exit(255);
+            }));
+        }
+    }
 
     Ok(())
 }
