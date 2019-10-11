@@ -24,7 +24,7 @@ datamodel = { path = "../../libs/datamodel" }
 prisma-models = { path = "../../prisma-models" }
 core = { path = "../core", package = "query-core" }
 sql-query-connector = { path = "../connectors/sql-query-connector", optional = true }
-prisma-query = { git = "https://github.com/prisma/prisma-query", optional = true }
+prisma-query = { git = "https://github.com/prisma/prisma-query", optional = true, features = ["tracing-log"] }
 graphql-parser = { version = "0.2.2", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = [ "preserve_order" ] }
