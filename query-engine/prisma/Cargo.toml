@@ -10,7 +10,7 @@ sql = ["sql-query-connector", "prisma-query"]
 graphql = ["graphql-parser"]
 
 [dependencies]
-tokio = "0.2.0-alpha.5"
+tokio = { version = "0.2.0-alpha.5", features = ["tracing"] }
 tokio-executor = "0.2.0-alpha.5"
 futures-preview = { version = "0.3.0-alpha.18", features = ["compat"] }
 http = "0.1"
@@ -38,7 +38,6 @@ itertools = "0.8"
 url = "1.7"
 clap = "2.33"
 human-panic = "1.0"
-mimallocator = "0.1"
 
 tracing = "0.1"
 tracing-log = "0.1"
