@@ -41,7 +41,7 @@ human-panic = "1.0"
 
 tracing = "0.1"
 tracing-log = "0.1"
-tracing-subscriber = { git = "https://github.com/pimeys/tracing", branch = "format-json", features = ["json"] }
+tracing-subscriber = { git = "https://github.com/tokio-rs/tracing", features = ["json"] }
 tracing-attributes = "0.1"
 log = "0.4"
 
