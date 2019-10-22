@@ -16,7 +16,7 @@ fn single_watch_migrations_must_work() {
         ];
 
         let db_schema_1 = apply_migration(test_setup, api, steps.clone(), "watch-0001").sql_schema;
-        let migrations = migration_persistence.load_all();
+        let migrations = migration_persistence.load_all().wait();
 
         assert_eq!(migrations.len(), 1);
         assert_eq!(migrations.first().unwrap().name, "watch-0001");
@@ -26,7 +26,7 @@ fn single_watch_migrations_must_work() {
 
         assert_eq!(db_schema_1, db_schema_2);
 
-        let migrations = migration_persistence.load_all();
+        let migrations = migration_persistence.load_all().wait();
 
         assert_eq!(migrations.len(), 2);
         assert_eq!(migrations[0].name, "watch-0001");
@@ -47,14 +47,14 @@ fn multiple_watch_migrations_must_work() {
         ];
 
         let _ = apply_migration(test_setup, api, steps1.clone(), "watch-0001");
-        let migrations = migration_persistence.load_all();
+        let migrations = dbg!(migration_persistence.load_all().wait());
 
         assert_eq!(migrations.len(), 1);
         assert_eq!(migrations[0].name, "watch-0001");
 
         let steps2 = vec![create_field_step("Test", "field", ScalarType::String)];
         let db_schema_2 = apply_migration(test_setup, api, steps2.clone(), "watch-0002").sql_schema;
-        let migrations = migration_persistence.load_all();
+        let migrations = migration_persistence.load_all().wait();
 
         assert_eq!(migrations.len(), 2);
         assert_eq!(migrations[0].name, "watch-0001");
@@ -70,7 +70,7 @@ fn multiple_watch_migrations_must_work() {
 
         assert_eq!(db_schema_2, final_db_schema);
 
-        let migrations = migration_persistence.load_all();
+        let migrations = migration_persistence.load_all().wait();
 
         assert_eq!(migrations.len(), 3);
         assert_eq!(migrations[0].name, "watch-0001");
@@ -106,7 +106,7 @@ fn steps_equivalence_criteria_is_satisfied_when_leaving_watch_mode() {
 
         let final_db_schema = apply_migration(test_setup, api, final_steps, custom_migration_id).sql_schema;
         assert_eq!(db_schema1, final_db_schema);
-        let migrations = migration_persistence.load_all();
+        let migrations = migration_persistence.load_all().wait();
         assert_eq!(migrations[0].name, "watch-0001");
         assert_eq!(migrations[1].name, "watch-0002");
         assert_eq!(migrations[2].name, "watch-0003");
@@ -145,7 +145,7 @@ fn must_handle_additional_steps_when_transitioning_out_of_watch_mode() {
         table.column_bang("field1");
         table.column_bang("field2");
 
-        let migrations = migration_persistence.load_all();
+        let migrations = migration_persistence.load_all().wait();
         assert_eq!(migrations[0].name, "watch-0001");
         assert_eq!(migrations[1].name, "watch-0002");
         assert_eq!(migrations[2].name, custom_migration_id);

@@ -357,3 +357,20 @@ fn db_host_mysql_5_7() -> String {
         Err(_) => "127.0.0.1".to_string(),
     }
 }
+
+pub trait BlockOnFuture {
+    type Output;
+
+    fn wait(self) -> Self::Output;
+}
+
+impl<O, F> BlockOnFuture for F
+where
+    F: std::future::Future<Output = O> + Sized,
+{
+    type Output = O;
+
+    fn wait(self) -> O {
+        futures::executor::block_on(self)
+    }
+}

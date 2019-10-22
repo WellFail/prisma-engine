@@ -11,7 +11,7 @@ use test_harness::*;
 fn last_should_return_none_if_there_is_no_migration() {
     test_each_connector(|_, api| {
         let persistence = api.migration_persistence();
-        let result = persistence.last();
+        let result = persistence.last().wait();
         assert_eq!(result.is_some(), false);
     });
 }
@@ -21,7 +21,7 @@ fn last_must_return_none_if_there_is_no_successful_migration() {
     test_each_connector(|_, api| {
         let persistence = api.migration_persistence();
         persistence.create(Migration::new("my_migration".to_string()));
-        let loaded = persistence.last();
+        let loaded = persistence.last().wait();
         assert_eq!(loaded, None);
     });
 }
@@ -30,7 +30,7 @@ fn last_must_return_none_if_there_is_no_successful_migration() {
 fn load_all_should_return_empty_if_there_is_no_migration() {
     test_each_connector(|_, api| {
         let persistence = api.migration_persistence();
-        let result = persistence.load_all();
+        let result = persistence.load_all().wait();
         assert_eq!(result.is_empty(), true);
     });
 }
@@ -39,11 +39,11 @@ fn load_all_should_return_empty_if_there_is_no_migration() {
 fn load_all_must_return_all_created_migrations() {
     test_each_connector(|test_setup, api| {
         let persistence = api.migration_persistence();
-        let migration1 = persistence.create(Migration::new("migration_1".to_string()));
-        let migration2 = persistence.create(Migration::new("migration_2".to_string()));
-        let migration3 = persistence.create(Migration::new("migration_3".to_string()));
+        let migration1 = persistence.create(Migration::new("migration_1".to_string())).wait();
+        let migration2 = persistence.create(Migration::new("migration_2".to_string())).wait();
+        let migration3 = persistence.create(Migration::new("migration_3".to_string())).wait();
 
-        let mut result = persistence.load_all();
+        let mut result = persistence.load_all().wait();
         if test_setup.sql_family == SqlFamily::Mysql {
             // TODO: mysql currently looses milli seconds on loading
             result[0].started_at = migration1.started_at;
@@ -76,11 +76,11 @@ fn create_should_allow_to_create_a_new_migration() {
         })];
         migration.errors = vec!["error1".to_string(), "error2".to_string()];
 
-        let result = persistence.create(migration.clone());
+        let result = persistence.create(migration.clone()).wait();
         migration.revision = result.revision; // copy over the generated revision so that the assertion can work.`
 
         assert_eq!(result, migration);
-        let mut loaded = persistence.last().unwrap();
+        let mut loaded = persistence.last().wait().unwrap();
         if test_setup.sql_family == SqlFamily::Mysql {
             // TODO: mysql currently looses milli seconds on loading
             loaded.started_at = migration.started_at;
@@ -93,8 +93,8 @@ fn create_should_allow_to_create_a_new_migration() {
 fn create_should_increment_revisions() {
     test_each_connector(|_, api| {
         let persistence = api.migration_persistence();
-        let migration1 = persistence.create(Migration::new("migration_1".to_string()));
-        let migration2 = persistence.create(Migration::new("migration_2".to_string()));
+        let migration1 = persistence.create(Migration::new("migration_1".to_string())).wait();
+        let migration2 = persistence.create(Migration::new("migration_2".to_string())).wait();
         assert_eq!(migration1.revision + 1, migration2.revision);
     });
 }
@@ -103,7 +103,7 @@ fn create_should_increment_revisions() {
 fn update_must_work() {
     test_each_connector(|test_setup, api| {
         let persistence = api.migration_persistence();
-        let migration = persistence.create(Migration::new("my_migration".to_string()));
+        let migration = persistence.create(Migration::new("my_migration".to_string())).wait();
 
         let mut params = migration.update_params();
         params.status = MigrationStatus::MigrationSuccess;
@@ -115,7 +115,7 @@ fn update_must_work() {
 
         persistence.update(&params);
 
-        let loaded = persistence.last().unwrap();
+        let loaded = persistence.last().wait().unwrap();
         assert_eq!(loaded.status, params.status);
         assert_eq!(loaded.applied, params.applied);
         assert_eq!(loaded.rolled_back, params.rolled_back);

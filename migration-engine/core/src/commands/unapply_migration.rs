@@ -20,12 +20,12 @@ impl MigrationCommand for UnapplyMigrationCommand {
     async fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
     where
         C: MigrationConnector<DatabaseMigration = D>,
-        D: DatabaseMigrationMarker + 'static,
+        D: DatabaseMigrationMarker + Send + Sync + 'static,
     {
         debug!("{:?}", self.input);
         let connector = engine.connector();
 
-        let result = match connector.migration_persistence().last() {
+        let result = match connector.migration_persistence().last().await {
             None => UnapplyMigrationOutput {
                 rolled_back: "not-applicable".to_string(),
                 active: None,
@@ -39,7 +39,7 @@ impl MigrationCommand for UnapplyMigrationCommand {
                     .migration_applier()
                     .unapply(&migration_to_rollback, &database_migration)?;
 
-                let new_active_migration = connector.migration_persistence().last().map(|m| m.name);
+                let new_active_migration = connector.migration_persistence().last().await.map(|m| m.name);
 
                 UnapplyMigrationOutput {
                     rolled_back: migration_to_rollback.name,

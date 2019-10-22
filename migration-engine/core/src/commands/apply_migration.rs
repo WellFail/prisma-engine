@@ -29,17 +29,17 @@ impl MigrationCommand for ApplyMigrationCommand {
         let connector = engine.connector();
         let migration_persistence = connector.migration_persistence();
 
-        match migration_persistence.last() {
+        match migration_persistence.last().await {
             Some(ref last_migration) if last_migration.is_watch_migration() && !self.input.is_watch_migration() => {
-                self.handle_transition_out_of_watch_mode(&engine)
+                self.handle_transition_out_of_watch_mode(&engine).await
             }
-            _ => self.handle_normal_migration(&engine),
+            _ => self.handle_normal_migration(&engine).await,
         }
     }
 }
 
 impl ApplyMigrationCommand {
-    fn handle_transition_out_of_watch_mode<C, D>(
+    async fn handle_transition_out_of_watch_mode<C, D>(
         &self,
         engine: &MigrationEngine<C, D>,
     ) -> CommandResult<MigrationStepsResultOutput>
@@ -50,32 +50,32 @@ impl ApplyMigrationCommand {
         let connector = engine.connector();
         let migration_persistence = connector.migration_persistence();
 
-        let current_datamodel = migration_persistence.current_datamodel();
-        let last_non_watch_datamodel = migration_persistence.last_non_watch_datamodel();
+        let current_datamodel = migration_persistence.current_datamodel().await;
+        let last_non_watch_datamodel = migration_persistence.last_non_watch_datamodel().await;
         let next_datamodel = engine
             .datamodel_calculator()
             .infer(&last_non_watch_datamodel, &self.input.steps);
 
-        self.handle_migration(&engine, current_datamodel, next_datamodel)
+        self.handle_migration(&engine, current_datamodel, next_datamodel).await
     }
 
-    fn handle_normal_migration<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<MigrationStepsResultOutput>
+    async fn handle_normal_migration<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<MigrationStepsResultOutput>
     where
         C: MigrationConnector<DatabaseMigration = D>,
         D: DatabaseMigrationMarker + Send + Sync + 'static,
     {
         let connector = engine.connector();
         let migration_persistence = connector.migration_persistence();
-        let current_datamodel = migration_persistence.current_datamodel();
+        let current_datamodel = migration_persistence.current_datamodel().await;
 
         let next_datamodel = engine
             .datamodel_calculator()
             .infer(&current_datamodel, &self.input.steps);
 
-        self.handle_migration(&engine, current_datamodel, next_datamodel)
+        self.handle_migration(&engine, current_datamodel, next_datamodel).await
     }
 
-    fn handle_migration<C, D>(
+    async fn handle_migration<C, D>(
         &self,
         engine: &MigrationEngine<C, D>,
         current_datamodel: Datamodel,
@@ -109,7 +109,7 @@ impl ApplyMigrationCommand {
         match (diagnostics.has_warnings(), self.input.force.unwrap_or(false)) {
             // We have no warnings, or the force flag is passed.
             (false, _) | (true, true) => {
-                let saved_migration = migration_persistence.create(migration);
+                let saved_migration = migration_persistence.create(migration).await;
 
                 connector
                     .migration_applier()
