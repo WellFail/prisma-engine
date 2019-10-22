@@ -19,8 +19,8 @@ impl MigrationCommand for ResetCommand {
         C: MigrationConnector<DatabaseMigration = D>,
         D: DatabaseMigrationMarker + 'static,
     {
-        engine.reset()?;
-        engine.init()?;
+        engine.reset().await?;
+        engine.init().await?;
 
         Ok(json!({}))
     }

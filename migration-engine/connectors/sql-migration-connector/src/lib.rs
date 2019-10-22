@@ -173,6 +173,7 @@ impl SqlMigrationConnector {
     }
 }
 
+#[async_trait::async_trait]
 impl MigrationConnector for SqlMigrationConnector {
     type DatabaseMigration = SqlMigration;
 
@@ -180,7 +181,7 @@ impl MigrationConnector for SqlMigrationConnector {
         self.sql_family.connector_type_string()
     }
 
-    fn create_database(&self, db_name: &str) -> ConnectorResult<()> {
+    async fn create_database(&self, db_name: &str) -> ConnectorResult<()> {
         match self.sql_family {
             SqlFamily::Postgres => {
                 self.database
@@ -198,7 +199,7 @@ impl MigrationConnector for SqlMigrationConnector {
         }
     }
 
-    fn initialize(&self) -> ConnectorResult<()> {
+    async fn initialize(&self) -> ConnectorResult<()> {
         // TODO: this code probably does not ever do anything. The schema/db creation happens already in the helper functions above.
         match self.sql_family {
             SqlFamily::Sqlite => {
@@ -236,7 +237,7 @@ impl MigrationConnector for SqlMigrationConnector {
         Ok(())
     }
 
-    fn reset(&self) -> ConnectorResult<()> {
+    async fn reset(&self) -> ConnectorResult<()> {
         self.migration_persistence.reset();
         Ok(())
     }

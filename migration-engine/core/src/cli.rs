@@ -60,7 +60,7 @@ pub fn run(matches: &ArgMatches, datasource: &str) -> std::result::Result<String
         Ok("Connection successful".into())
     } else if matches.is_present("create_database") {
         let (db_name, conn) = create_conn(datasource, true).unwrap();
-        conn.create_database(&db_name)?;
+        futures::executor::block_on(conn.create_database(&db_name))?;
         Ok(format!("Database '{}' created successfully.", db_name))
     } else {
         Err(CliError::NoCommandDefined)

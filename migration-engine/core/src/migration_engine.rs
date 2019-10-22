@@ -27,18 +27,18 @@ where
             connector,
         };
 
-        engine.init()?;
+        futures::executor::block_on(engine.init())?;
 
         Ok(engine)
     }
 
-    pub fn init(&self) -> CommandResult<()> {
-        self.connector().initialize()?;
+    pub async fn init(&self) -> CommandResult<()> {
+        self.connector().initialize().await?;
         Ok(())
     }
 
-    pub fn reset(&self) -> CommandResult<()> {
-        self.connector().reset()?;
+    pub async fn reset(&self) -> CommandResult<()> {
+        self.connector().reset().await?;
         Ok(())
     }
 
