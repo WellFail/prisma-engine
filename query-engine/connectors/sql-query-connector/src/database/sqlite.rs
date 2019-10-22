@@ -1,24 +1,20 @@
-use crate::{query_builder::ManyRelatedRecordsWithRowNumber, FromSource, SqlCapabilities, Transaction, Transactional};
-use tokio_executor::threadpool::blocking;
-use futures::future::{FutureExt, ok, err, BoxFuture, poll_fn};
+use crate::{query_builder::ManyRelatedRecordsWithRowNumber, FromSource, SqlCapabilities, Transaction, Transactional, SQLIO};
 use datamodel::Source;
 use prisma_query::{
-    connector::{self, SqliteParams, Queryable},
-    pool::{sqlite::SqliteConnectionManager, PrismaConnectionManager},
+    connector::{SqliteParams, Queryable},
+    pool::{self, SqliteManager},
 };
 use std::convert::TryFrom;
-
-type Pool = r2d2::Pool<PrismaConnectionManager<SqliteConnectionManager>>;
+use tokio_resource_pool::{CheckOut, Pool};
 
 pub struct Sqlite {
-    pool: Pool,
+    pool: Pool<SqliteManager>,
     file_path: String,
 }
 
 impl Sqlite {
-    pub fn new(file_path: String, connection_limit: u32) -> crate::Result<Self> {
-        let manager = PrismaConnectionManager::sqlite(None, &file_path)?;
-        let pool = r2d2::Pool::builder().max_size(connection_limit).build(manager)?;
+    pub fn new(file_path: String) -> crate::Result<Self> {
+        let pool = pool::sqlite(&file_path)?;
 
         Ok(Self {
             pool,
@@ -34,13 +30,9 @@ impl Sqlite {
 impl FromSource for Sqlite {
     fn from_source(source: &dyn Source) -> crate::Result<Self> {
         let params = SqliteParams::try_from(source.url().value.as_str())?;
-        let file_path = params.file_path.clone();
-        let pool = r2d2::Pool::try_from(params).unwrap();
+        let file_path = params.file_path.to_str().unwrap().to_string();
 
-        Ok(Sqlite {
-            pool,
-            file_path: file_path.to_str().unwrap().to_string(),
-        })
+        Self::new(file_path)
     }
 }
 
@@ -48,75 +40,17 @@ impl SqlCapabilities for Sqlite {
     type ManyRelatedRecordsBuilder = ManyRelatedRecordsWithRowNumber;
 }
 
-impl Transaction for connector::Sqlite {}
+impl Transaction for CheckOut<SqliteManager> {}
 
 impl Transactional for Sqlite {
-    fn with_transaction<F, T>(&self, db: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
-    where
-        T: Send + Sync + 'static,
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
-    {
-        let pool = self.pool.clone();
-        let db = db.to_string();
-        let mut f_cell = Some(f);
+    fn get_connection<'a>(&'a self, db: &'a str) -> SQLIO<'a, Box<dyn Transaction>> {
+        SQLIO::new(async move {
+            let mut conn = self.pool.check_out().await?;
 
-        let fut = poll_fn(move |_| {
-            blocking(|| {
-                let f = f_cell.take().unwrap();
-                let mut conn = pool.get()?;
+            conn.attach_database(db)?;
+            conn.execute_raw("PRAGMA foreign_keys = ON", &[]).await?;
 
-                conn.attach_database(db.as_str())?;
-                conn.execute_raw("PRAGMA foreign_keys = ON", &[])?;
-
-                let mut tx = conn.start_transaction()?;
-                let result = f(&mut tx);
-
-                if result.is_ok() {
-                    tx.commit()?;
-                }
-
-                result
-            })
-        }).then(|res| {
-            match res {
-                Ok(Ok(results)) => ok(results),
-                Ok(Err(query_err)) => err(query_err),
-                Err(blocking_err) => err(blocking_err.into())
-            }
-        });
-
-        fut.boxed()
-    }
-
-    fn with_connection<F, T>(&self, db: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
-    where
-        T: Send + Sync + 'static,
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
-    {
-        let pool = self.pool.clone();
-        let db = db.to_string();
-        let mut f_cell = Some(f);
-
-        let fut = poll_fn(move |_| {
-            blocking(|| {
-                let f = f_cell.take().unwrap();
-                let mut conn = pool.get()?;
-
-                conn.attach_database(db.as_str())?;
-                conn.execute_raw("PRAGMA foreign_keys = ON", &[])?;
-
-                let result = f(&mut *conn);
-
-                result
-            })
-        }).then(|res| {
-            match res {
-                Ok(Ok(results)) => ok(results),
-                Ok(Err(query_err)) => err(query_err),
-                Err(blocking_err) => err(blocking_err.into())
-            }
-        });
-
-        fut.boxed()
+            Ok(Box::new(conn) as Box<dyn Transaction>)
+        })
     }
 }

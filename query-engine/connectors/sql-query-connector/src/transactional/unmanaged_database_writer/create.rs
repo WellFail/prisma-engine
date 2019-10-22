@@ -8,8 +8,8 @@ use prisma_query::error::Error as QueryError;
 use std::sync::Arc;
 
 /// Creates a new root record and any associated list records to the database.
-pub fn execute<S>(
-    conn: &mut dyn Transaction,
+pub async fn execute<S>(
+    conn: &dyn Transaction,
     model: ModelRef,
     non_list_args: &PrismaArgs,
     list_args: &[(S, PrismaListValue)],
@@ -19,7 +19,7 @@ where
 {
     let (insert, returned_id) = WriteQueryBuilder::create_record(Arc::clone(&model), non_list_args.clone());
 
-    let last_id = match conn.insert(insert) {
+    let last_id = match conn.insert(insert).await {
         Ok(id) => id,
         Err(QueryError::UniqueConstraintViolation { field_name }) => {
             if field_name == "PRIMARY" {
@@ -56,7 +56,7 @@ where
         let table = field.scalar_list_table();
 
         if let Some(insert) = WriteQueryBuilder::create_scalar_list_value(table.table(), &list_value, &id) {
-            conn.insert(insert)?;
+            conn.insert(insert).await?;
         }
     }
 
@@ -65,8 +65,8 @@ where
 
 /// Creates a new nested item related to a parent, including any associated
 /// list values, and is connected with the `parent_id` to the parent record.
-pub fn execute_nested<S>(
-    conn: &mut dyn Transaction,
+pub async fn execute_nested<S>(
+    conn: &dyn Transaction,
     parent_id: &GraphqlId,
     actions: &dyn NestedActions,
     relation_field: RelationFieldRef,
@@ -77,12 +77,12 @@ where
     S: AsRef<str>,
 {
     if let Some((select, check)) = actions.required_check(parent_id)? {
-        let ids = conn.select_ids(select)?;
+        let ids = conn.select_ids(select).await?;
         check(ids.into_iter().next().is_some())?
     };
 
     if let Some(query) = actions.parent_removal(parent_id) {
-        conn.execute(query)?;
+        conn.execute(query).await?;
     }
 
     let related_field = relation_field.related_field();
@@ -91,12 +91,12 @@ where
         let mut prisma_args = non_list_args.clone();
         prisma_args.insert(related_field.name.clone(), parent_id.clone());
 
-        execute(conn, relation_field.related_model(), &prisma_args, list_args)
+        execute(conn, relation_field.related_model(), &prisma_args, list_args).await
     } else {
-        let id = execute(conn, relation_field.related_model(), non_list_args, list_args)?;
+        let id = execute(conn, relation_field.related_model(), non_list_args, list_args).await?;
         let relation_query = WriteQueryBuilder::create_relation(relation_field, parent_id, &id);
 
-        conn.execute(relation_query)?;
+        conn.execute(relation_query).await?;
 
         Ok(id)
     }

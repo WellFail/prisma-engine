@@ -5,7 +5,7 @@ pub use graphql::{GraphQlBody, GraphQlRequestHandler};
 
 use crate::{context::PrismaContext};
 use serde_json;
-use std::{collections::HashMap, sync::Arc, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug};
 use futures::future::BoxFuture;
 
 pub trait RequestHandler {

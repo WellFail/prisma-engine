@@ -11,18 +11,18 @@ use std::sync::Arc;
 /// non-existing record will cause an error.
 ///
 /// Will return the deleted record if the delete was successful.
-pub fn execute(conn: &mut dyn Transaction, record_finder: &RecordFinder) -> crate::Result<SingleRecord> {
+pub async fn execute(conn: &dyn Transaction, record_finder: &RecordFinder) -> crate::Result<SingleRecord> {
     let model = record_finder.field.model();
-    let record = conn.find_record(record_finder)?;
+    let record = conn.find_record(record_finder).await?;
     let id = record.collect_id(&model.fields().id().name).unwrap();
 
-    DeleteActions::check_relation_violations(Arc::clone(&model), &[&id], |select| {
-        let ids = conn.select_ids(select)?;
+    DeleteActions::check_relation_violations(Arc::clone(&model), &[&id], |select| async move {
+        let ids = conn.select_ids(select).await?;
         Ok(ids.into_iter().next())
-    })?;
+    }).await?;
 
     for delete in WriteQueryBuilder::delete_many(model, &[&id]) {
-        conn.delete(delete)?;
+        conn.delete(delete).await?;
     }
 
     Ok(record)
@@ -37,18 +37,18 @@ pub fn execute(conn: &mut dyn Transaction, record_finder: &RecordFinder) -> crat
 /// - Violating any relations where the deleted record is required
 /// - If the deleted record is not connected to the parent
 /// - The record does not exist
-pub fn execute_nested(
-    conn: &mut dyn Transaction,
+pub async fn execute_nested(
+    conn: &dyn Transaction,
     parent_id: &GraphqlId,
     actions: &dyn NestedActions,
     record_finder: &Option<RecordFinder>,
     relation_field: RelationFieldRef,
 ) -> crate::Result<()> {
     if let Some(ref record_finder) = record_finder {
-        conn.find_id(record_finder)?;
+        conn.find_id(record_finder).await?;
     };
 
-    let find = conn.find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder);
+    let find = conn.find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder).await;
 
     let child_id = find.map_err(|e| match e {
         SqlError::RecordsNotConnected {
@@ -73,19 +73,19 @@ pub fn execute_nested(
 
     {
         let (select, check) = actions.ensure_connected(parent_id, &child_id);
-        let ids = conn.select_ids(select)?;
+        let ids = conn.select_ids(select).await?;
         check(ids.into_iter().next().is_some())?;
     }
 
     let related_model = relation_field.related_model();
 
-    DeleteActions::check_relation_violations(related_model, &[&child_id; 1], |select| {
-        let ids = conn.select_ids(select)?;
+    DeleteActions::check_relation_violations(related_model, &[&child_id; 1], |select| async move {
+        let ids = conn.select_ids(select).await?;
         Ok(ids.into_iter().next())
-    })?;
+    }).await?;
 
     for delete in WriteQueryBuilder::delete_many(relation_field.related_model(), &[&child_id]) {
-        conn.delete(delete)?;
+        conn.delete(delete).await?;
     }
 
     Ok(())

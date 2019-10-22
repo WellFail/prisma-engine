@@ -20,89 +20,80 @@ impl<T> ManagedDatabaseReader for SqlDatabase<T>
 where
     T: Transactional + SqlCapabilities + Send + Sync + 'static,
 {
-    fn get_single_record(
-        &self,
-        record_finder: &RecordFinder,
-        selected_fields: &SelectedFields,
-    ) -> BoxFuture<'static, connector_interface::Result<Option<SingleRecord>>> {
-        let db_name = &record_finder.field.model().internal_data_model().db_name;
-        let query = ReadQueryBuilder::get_records(record_finder.field.model(), selected_fields, record_finder);
-        let field_names = selected_fields.names();
-        let idents = selected_fields.type_identifiers();
+    fn get_single_record<'a>(
+        &'a self,
+        record_finder: &'a RecordFinder,
+        selected_fields: &'a SelectedFields,
+    ) -> BoxFuture<'a, connector_interface::Result<Option<SingleRecord>>> {
+        async move {
+            let db_name = &record_finder.field.model().internal_data_model().db_name;
+            let query = ReadQueryBuilder::get_records(record_finder.field.model(), selected_fields, record_finder);
 
-        let fut = self
-            .executor
-            .with_connection(db_name, move |conn| match conn.find(query, idents.as_slice()) {
+            let field_names = selected_fields.names();
+            let idents = selected_fields.type_identifiers();
+            let conn = self.executor.get_connection(db_name).await?;
+
+            let result = match conn.find(query, idents.as_slice()).await {
                 Ok(result) => Ok(Some(result)),
                 Err(_e @ SqlError::RecordNotFoundForWhere(_)) => Ok(None),
                 Err(e) => Err(e),
-            });
+            }?;
 
-        async move {
-            let result = fut.await?
-                .map(Record::from)
-                .map(|record| SingleRecord {
-                    record,
-                    field_names,
-                });
-
-            Ok(result)
+            Ok(result.map(|r| SingleRecord {
+                record: Record::from(r),
+                field_names,
+            }))
         }.boxed()
     }
 
-    fn get_many_records(
-        &self,
+    fn get_many_records<'a>(
+        &'a self,
         model: ModelRef,
         query_arguments: QueryArguments,
-        selected_fields: &SelectedFields,
-    ) -> BoxFuture<'static, connector_interface::Result<ManyRecords>> {
-        let db_name = &model.internal_data_model().db_name;
-        let field_names = selected_fields.names();
-        let idents = selected_fields.type_identifiers();
-        let query = ReadQueryBuilder::get_records(model, selected_fields, query_arguments);
-
-        let fut = self
-            .executor
-            .with_connection(db_name, move |conn| conn.filter(query.into(), idents.as_slice()));
-
+        selected_fields: &'a SelectedFields,
+    ) -> BoxFuture<'a, connector_interface::Result<ManyRecords>> {
         async move {
-            let records = fut
-                .await?
-                .into_iter()
-                .map(Record::from)
-                .collect();
+            let db_name = &model.internal_data_model().db_name;
+            let field_names = selected_fields.names();
+
+            let idents = selected_fields.type_identifiers();
+            let query = ReadQueryBuilder::get_records(model, selected_fields, query_arguments);
+
+            let conn = self.executor.get_connection(db_name).await?;
+            let records = conn.filter(query.into(), idents.as_slice()).await?;
+            let records = records.into_iter().map(Record::from).collect();
 
             Ok(ManyRecords { records, field_names })
         }.boxed()
     }
 
-    fn get_related_records(
-        &self,
+    fn get_related_records<'a>(
+        &'a self,
         from_field: RelationFieldRef,
-        from_record_ids: &[GraphqlId],
+        from_record_ids: &'a [GraphqlId],
         query_arguments: QueryArguments,
-        selected_fields: &SelectedFields,
-    ) -> BoxFuture<'static, connector_interface::Result<ManyRecords>> {
-        let db_name = &from_field.model().internal_data_model().db_name;
-        let idents = selected_fields.type_identifiers();
-        let field_names = selected_fields.names();
-
-        let query = {
-            let is_with_pagination = query_arguments.is_with_pagination();
-            let base = ManyRelatedRecordsBaseQuery::new(from_field, from_record_ids.to_vec(), query_arguments, selected_fields.clone());
-
-            if is_with_pagination {
-                T::ManyRelatedRecordsBuilder::with_pagination(base)
-            } else {
-                T::ManyRelatedRecordsBuilder::without_pagination(base)
-            }
-        };
-
-        let fut = self.executor.with_connection(db_name, move |conn| conn.filter(query, idents.as_slice()));
-
+        selected_fields: &'a SelectedFields,
+    ) -> BoxFuture<'a, connector_interface::Result<ManyRecords>> {
         async move {
-            let records: connector_interface::Result<Vec<Record>> = fut
-                .await?
+            let db_name = &from_field.model().internal_data_model().db_name;
+            let idents = selected_fields.type_identifiers();
+            let field_names = selected_fields.names();
+
+            let query = {
+                let is_with_pagination = query_arguments.is_with_pagination();
+                let base = ManyRelatedRecordsBaseQuery::new(from_field, from_record_ids.to_vec(), query_arguments, selected_fields.clone());
+
+                if is_with_pagination {
+                    T::ManyRelatedRecordsBuilder::with_pagination(base)
+                } else {
+                    T::ManyRelatedRecordsBuilder::without_pagination(base)
+                }
+            };
+
+            let conn = self.executor.get_connection(db_name).await?;
+            let records = conn.filter(query, idents.as_slice()).await?;
+
+            let records: connector_interface::Result<Vec<Record>> = records
                 .into_iter()
                 .map(|mut row| {
                     let parent_id = row.values.pop().ok_or(ConnectorError::ColumnDoesNotExist)?;
@@ -125,34 +116,41 @@ where
         }.boxed()
     }
 
-    fn count_by_model(&self, model: ModelRef, query_arguments: QueryArguments) -> BoxFuture<'static, connector_interface::Result<usize>> {
-        let db_name = &model.internal_data_model().db_name;
-        let query = ReadQueryBuilder::count_by_model(model, query_arguments);
+    fn count_by_model<'a>(&'a self, model: ModelRef, query_arguments: QueryArguments) -> BoxFuture<'a, connector_interface::Result<usize>> {
+        async move {
+            let db_name = &model.internal_data_model().db_name;
+            let query = ReadQueryBuilder::count_by_model(model, query_arguments);
+            let conn = self.executor.get_connection(db_name).await?;
 
-        let fut = self.executor.with_connection(db_name, |conn| conn.find_int(query));
-        async move { Ok(fut.await.map(|count| count as usize)?) }.boxed()
+            Ok(conn.find_int(query).await? as usize)
+        }.boxed()
     }
 
-    fn count_by_table(&self, database: &str, table: &str) -> BoxFuture<'static, connector_interface::Result<usize>> {
-        let query = ReadQueryBuilder::count_by_table(database, table);
+    fn count_by_table<'a>(&'a self, database: &'a str, table: &'a str) -> BoxFuture<'a, connector_interface::Result<usize>> {
+        async move {
+            let query = ReadQueryBuilder::count_by_table(database, table);
+            let conn = self.executor.get_connection(database).await?;
 
-        let fut = self.executor.with_connection(database, |conn| conn.find_int(query));
-        async move { Ok(fut.await.map(|count| count as usize)?) }.boxed()
+            Ok(conn.find_int(query).await? as usize)
+        }.boxed()
     }
 
-    fn get_scalar_list_values_by_record_ids(
-        &self,
+    fn get_scalar_list_values_by_record_ids<'a>(
+        &'a self,
         list_field: ScalarFieldRef,
         record_ids: Vec<GraphqlId>,
-    ) -> BoxFuture<'static, connector_interface::Result<Vec<ScalarListValues>>> {
-        let db_name = &list_field.model().internal_data_model().db_name;
-        let type_identifier = list_field.type_identifier;
-        let query = ReadQueryBuilder::get_scalar_list_values_by_record_ids(list_field, record_ids);
+    ) -> BoxFuture<'a, connector_interface::Result<Vec<ScalarListValues>>> {
+        async move {
+            let db_name = &list_field.model().internal_data_model().db_name;
+            let type_identifier = list_field.type_identifier;
 
-        let fut = self.executor.with_connection(db_name, move |conn| {
-            let rows = conn.filter(query.into(), &[TypeIdentifier::GraphQLID, type_identifier])?;
+            let query = ReadQueryBuilder::get_scalar_list_values_by_record_ids(list_field, record_ids);
+            let conn = self.executor.get_connection(db_name).await?;
 
-            rows.into_iter()
+            let rows = conn.filter(query.into(), &[TypeIdentifier::GraphQLID, type_identifier]).await?;
+
+            let results: connector_interface::Result<Vec<ScalarListElement>> = rows
+                .into_iter()
                 .map(|row| {
                     let mut iter = row.values.into_iter();
 
@@ -164,14 +162,11 @@ where
                         value,
                     })
                 })
-                .collect()
-        });
+                .collect();
 
-        async {
-            let results: Vec<ScalarListElement> = fut.await?;
             let mut list_values = Vec::new();
 
-            for (record_id, elements) in &results.into_iter().group_by(|ele| ele.record_id.clone()) {
+            for (record_id, elements) in &results?.into_iter().group_by(|ele| ele.record_id.clone()) {
                 let values = ScalarListValues {
                     record_id,
                     values: elements.into_iter().map(|e| e.value).collect(),

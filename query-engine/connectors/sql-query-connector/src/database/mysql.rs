@@ -1,25 +1,19 @@
-use crate::{query_builder::ManyRelatedRecordsWithUnionAll, FromSource, SqlCapabilities, Transaction, Transactional};
-use tokio_executor::threadpool::blocking;
-use futures::future::{FutureExt, ok, err, BoxFuture, poll_fn};
+use crate::{query_builder::ManyRelatedRecordsWithUnionAll, FromSource, SqlCapabilities, Transaction, Transactional, SQLIO};
 use datamodel::Source;
 use prisma_query::{
-    connector::{self, MysqlParams, Queryable},
-    pool::{mysql::MysqlConnectionManager, PrismaConnectionManager},
+    pool::{self, MysqlManager},
 };
-use std::convert::TryFrom;
 use url::Url;
-
-type Pool = r2d2::Pool<PrismaConnectionManager<MysqlConnectionManager>>;
+use tokio_resource_pool::{CheckOut, Pool};
 
 pub struct Mysql {
-    pool: Pool,
+    pool: Pool<MysqlManager>,
 }
 
 impl FromSource for Mysql {
     fn from_source(source: &dyn Source) -> crate::Result<Self> {
         let url = Url::parse(&source.url().value)?;
-        let params = MysqlParams::try_from(url)?;
-        let pool = r2d2::Pool::try_from(params).unwrap();
+        let pool = pool::mysql(url)?;
 
         Ok(Mysql { pool })
     }
@@ -29,66 +23,13 @@ impl SqlCapabilities for Mysql {
     type ManyRelatedRecordsBuilder = ManyRelatedRecordsWithUnionAll;
 }
 
-
-impl Transaction for connector::Mysql {}
+impl Transaction for CheckOut<MysqlManager> {}
 
 impl Transactional for Mysql {
-    fn with_transaction<F, T>(&self, _: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
-    where
-        T: Send + Sync + 'static,
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
-    {
-        let pool = self.pool.clone();
-        let mut f_cell = Some(f);
-
-        let fut = poll_fn(move |_| {
-            blocking(|| {
-                let f = f_cell.take().unwrap();
-
-                let mut conn = pool.get()?;
-                let mut tx = conn.start_transaction()?;
-                let result = f(&mut tx);
-
-                if result.is_ok() {
-                    tx.commit()?;
-                }
-
-                result
-            })
-        }).then(|res| {
-            match res {
-                Ok(Ok(results)) => ok(results),
-                Ok(Err(query_err)) => err(query_err),
-                Err(blocking_err) => err(blocking_err.into())
-            }
-        });
-
-        fut.boxed()
-    }
-
-    fn with_connection<F, T>(&self, _: &str, f: F) -> BoxFuture<'static, crate::Result<T>>
-    where
-        T: Send + Sync + 'static,
-        F: FnOnce(&mut dyn Transaction) -> crate::Result<T> + Send + Sync + 'static,
-    {
-        let pool = self.pool.clone();
-        let mut f_cell = Some(f);
-
-        let fut = poll_fn(move |_| {
-            blocking(|| {
-                let f = f_cell.take().unwrap();
-                let mut conn = pool.get()?;
-
-                f(&mut *conn)
-            })
-        }).then(|res| {
-            match res {
-                Ok(Ok(results)) => ok(results),
-                Ok(Err(query_err)) => err(query_err),
-                Err(blocking_err) => err(blocking_err.into())
-            }
-        });
-
-        fut.boxed()
+    fn get_connection<'a>(&'a self, _: &'a str) -> SQLIO<'a, Box<dyn Transaction>> {
+        SQLIO::new(async move {
+            let conn = self.pool.check_out().await?;
+            Ok(Box::new(conn) as Box<dyn Transaction>)
+        })
     }
 }

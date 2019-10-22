@@ -17,7 +17,7 @@ use prisma_query::ast::*;
 
 pub type ResultCheck = Box<dyn FnOnce(bool) -> crate::Result<()> + Send + Sync + 'static>;
 
-pub trait NestedActions {
+pub trait NestedActions: Send + Sync {
     fn required_check(&self, parent_id: &GraphqlId) -> crate::Result<Option<(Select<'static>, ResultCheck)>>;
 
     fn parent_removal(&self, parent_id: &GraphqlId) -> Option<Query<'static>>;

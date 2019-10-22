@@ -4,8 +4,8 @@ use prisma_models::{GraphqlId, ModelRef, PrismaArgs, PrismaListValue, RelationFi
 use std::sync::Arc;
 
 /// Updates one record and any associated list record in the database.
-pub fn execute<S>(
-    conn: &mut dyn Transaction,
+pub async fn execute<S>(
+    conn: &dyn Transaction,
     record_finder: &RecordFinder,
     non_list_args: &PrismaArgs,
     list_args: &[(S, PrismaListValue)],
@@ -14,21 +14,21 @@ where
     S: AsRef<str>,
 {
     let model = record_finder.field.model();
-    let id = conn.find_id(record_finder)?;
+    let id = conn.find_id(record_finder).await?;
 
     if let Some(update) = WriteQueryBuilder::update_one(Arc::clone(&model), &id, non_list_args)? {
-        conn.update(update)?;
+        conn.update(update).await?;
     }
 
-    update_list_args(conn, &[id.clone()], Arc::clone(&model), list_args)?;
+    update_list_args(conn, &[id.clone()], Arc::clone(&model), list_args).await?;
 
     Ok(id)
 }
 
 /// Updates a nested item related to the parent, including any associated
 /// list values.
-pub fn execute_nested<S>(
-    conn: &mut dyn Transaction,
+pub async fn execute_nested<S>(
+    conn: &dyn Transaction,
     parent_id: &GraphqlId,
     record_finder: &Option<RecordFinder>,
     relation_field: RelationFieldRef,
@@ -39,18 +39,18 @@ where
     S: AsRef<str>,
 {
     if let Some(ref record_finder) = record_finder {
-        conn.find_id(record_finder)?;
+        conn.find_id(record_finder).await?;
     };
 
-    let id = conn.find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder)?;
+    let id = conn.find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder).await?;
     let record_finder = RecordFinder::from((relation_field.related_model().fields().id(), id));
 
-    execute(conn, &record_finder, non_list_args, list_args)
+    execute(conn, &record_finder, non_list_args, list_args).await
 }
 
 /// Updates list args related to the given records.
-pub fn update_list_args<S>(
-    conn: &mut dyn Transaction,
+pub async fn update_list_args<S>(
+    conn: &dyn Transaction,
     ids: &[GraphqlId],
     model: ModelRef,
     list_args: &[(S, PrismaListValue)],
@@ -64,11 +64,11 @@ where
         let (deletes, inserts) = WriteQueryBuilder::update_scalar_list_values(&table, &list_value, ids.to_vec());
 
         for delete in deletes {
-            conn.delete(delete)?;
+            conn.delete(delete).await?;
         }
 
         for insert in inserts {
-            conn.insert(insert)?;
+            conn.insert(insert).await?;
         }
     }
 

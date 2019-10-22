@@ -1,6 +1,7 @@
 use crate::error::SqlError;
 use prisma_models::prelude::*;
 use prisma_query::ast::*;
+use std::future::Future;
 
 /// Checks to be executed when deleting data.
 pub struct DeleteActions;
@@ -14,9 +15,10 @@ impl DeleteActions {
     /// connector, giving the connector the possibility to return an optional
     /// `GraphqlID` from the database, such as trying to read a row from the
     /// `SELECT`.
-    pub fn check_relation_violations<F>(model: ModelRef, ids: &[&GraphqlId], mut f: F) -> crate::Result<()>
+    pub async fn check_relation_violations<'a, F, U>(model: ModelRef, ids: &'a [&'a GraphqlId], f: F) -> crate::Result<()>
     where
-        F: FnMut(Select) -> crate::Result<Option<GraphqlId>>,
+        F: Fn(Select<'a>) -> U + Send + 'a,
+        U: Future<Output = crate::Result<Option<GraphqlId>>> + Send,
     {
         for rf in model.internal_data_model().fields_requiring_model(model) {
             let relation = rf.relation();
@@ -30,7 +32,7 @@ impl DeleteActions {
                 .column(rf.opposite_column())
                 .so_that(condition);
 
-            if let Some(_) = f(select)? {
+            if let Some(_) = f(select).await? {
                 return Err(SqlError::RelationViolation {
                     relation_name: relation.name.clone(),
                     model_a_name: relation.model_a().name.clone(),

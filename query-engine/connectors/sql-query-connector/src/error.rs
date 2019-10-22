@@ -2,7 +2,6 @@ use connector_interface::error::*;
 use failure::{Error, Fail};
 use prisma_models::prelude::DomainError;
 use std::string::FromUtf8Error;
-use tokio_executor::threadpool::BlockingError;
 
 #[derive(Debug, Fail)]
 pub enum SqlError {
@@ -75,18 +74,6 @@ pub enum SqlError {
 
     #[fail(display = "Authentication failed for user '{}'", user)]
     AuthenticationFailed { user: String },
-}
-
-impl From<BlockingError> for SqlError {
-    fn from(e: BlockingError) -> Self {
-        Self::ConnectionError(e.into())
-    }
-}
-
-impl From<tokio_postgres::error::Error> for SqlError {
-    fn from(e: tokio_postgres::error::Error) -> Self {
-        SqlError::ConnectionError(e.into())
-    }
 }
 
 impl From<SqlError> for ConnectorError {

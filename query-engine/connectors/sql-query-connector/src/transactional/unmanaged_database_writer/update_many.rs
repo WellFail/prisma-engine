@@ -8,8 +8,8 @@ use std::sync::Arc;
 /// matching the `Filter`.
 ///
 /// Returns the number of updated items, if successful.
-pub fn execute<S>(
-    conn: &mut dyn Transaction,
+pub async fn execute<S>(
+    conn: &dyn Transaction,
     model: ModelRef,
     filter: &Filter,
     non_list_args: &PrismaArgs,
@@ -18,7 +18,7 @@ pub fn execute<S>(
 where
     S: AsRef<str>,
 {
-    let ids = conn.filter_ids(Arc::clone(&model), filter.clone())?;
+    let ids = conn.filter_ids(Arc::clone(&model), filter.clone()).await?;
     let count = ids.len();
 
     if count == 0 {
@@ -31,18 +31,18 @@ where
     };
 
     for update in updates {
-        conn.update(update)?;
+        conn.update(update).await?;
     }
 
-    update::update_list_args(conn, ids.as_slice(), Arc::clone(&model), list_args)?;
+    update::update_list_args(conn, ids.as_slice(), Arc::clone(&model), list_args).await?;
 
     Ok(count)
 }
 
 /// Updates nested items matching to filter, or if no filter is given, all
 /// nested items related to the given `parent_id`.
-pub fn execute_nested<S>(
-    conn: &mut dyn Transaction,
+pub async fn execute_nested<S>(
+    conn: &dyn Transaction,
     parent_id: &GraphqlId,
     filter: &Option<Filter>,
     relation_field: RelationFieldRef,
@@ -52,8 +52,7 @@ pub fn execute_nested<S>(
 where
     S: AsRef<str>,
 {
-    let ids = conn.filter_ids_by_parents(Arc::clone(&relation_field), vec![parent_id], filter.clone())?;
-
+    let ids = conn.filter_ids_by_parents(Arc::clone(&relation_field), vec![parent_id], filter.clone()).await?;
     let count = ids.len();
 
     if count == 0 {
@@ -66,10 +65,10 @@ where
     };
 
     for update in updates {
-        conn.update(update)?;
+        conn.update(update).await?;
     }
 
-    update::update_list_args(conn, ids.as_slice(), relation_field.model(), list_args)?;
+    update::update_list_args(conn, ids.as_slice(), relation_field.model(), list_args).await?;
 
     Ok(count)
 }
