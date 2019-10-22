@@ -26,9 +26,11 @@ failure = "0.1"
 jsonrpc-core = "13.0"
 jsonrpc-stdio-server = "13.0"
 
-futures = "0.1"
+futures01 = { package = "futures", version= "0.1" }
+futures-preview = "0.3.0-alpha.19"
 tokio = "0.1"
 tokio-threadpool = "0.1"
+async-trait = "0.1.16"
 
 [dev-dependencies]
 prisma-query = { git = "https://github.com/prisma/prisma-query.git" }

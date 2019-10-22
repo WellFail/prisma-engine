@@ -6,19 +6,20 @@ use log::*;
 use migration_connector::*;
 use serde::Deserialize;
 
-pub struct InferMigrationStepsCommand<'a> {
-    input: &'a InferMigrationStepsInput,
+pub struct InferMigrationStepsCommand {
+    input: InferMigrationStepsInput,
 }
 
-impl<'a> MigrationCommand<'a> for InferMigrationStepsCommand<'a> {
+#[async_trait::async_trait]
+impl MigrationCommand for InferMigrationStepsCommand {
     type Input = InferMigrationStepsInput;
     type Output = MigrationStepsResultOutput;
 
-    fn new(input: &'a Self::Input) -> Box<Self> {
+    fn new(input: Self::Input) -> Box<Self> {
         Box::new(InferMigrationStepsCommand { input })
     }
 
-    fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
+    async fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
     where
         C: MigrationConnector<DatabaseMigration = D>,
         D: DatabaseMigrationMarker + Sync + Send + 'static,

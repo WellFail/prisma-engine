@@ -4,20 +4,20 @@ use chrono::{DateTime, Utc};
 use migration_connector::*;
 use serde::{Deserialize, Serialize};
 
-pub struct MigrationProgressCommand<'a> {
-    input: &'a MigrationProgressInput,
+pub struct MigrationProgressCommand {
+    input: MigrationProgressInput,
 }
 
-#[allow(unused)]
-impl<'a> MigrationCommand<'a> for MigrationProgressCommand<'a> {
+#[async_trait::async_trait]
+impl MigrationCommand for MigrationProgressCommand {
     type Input = MigrationProgressInput;
     type Output = MigrationProgressOutput;
 
-    fn new(input: &'a Self::Input) -> Box<Self> {
+    fn new(input: Self::Input) -> Box<Self> {
         Box::new(MigrationProgressCommand { input })
     }
 
-    fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
+    async fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
     where
         C: MigrationConnector<DatabaseMigration = D>,
         D: DatabaseMigrationMarker + 'static,

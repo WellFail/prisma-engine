@@ -4,19 +4,20 @@ use log::*;
 use migration_connector::*;
 use serde::{Deserialize, Serialize};
 
-pub struct UnapplyMigrationCommand<'a> {
-    input: &'a UnapplyMigrationInput,
+pub struct UnapplyMigrationCommand {
+    input: UnapplyMigrationInput,
 }
 
-impl<'a> MigrationCommand<'a> for UnapplyMigrationCommand<'a> {
+#[async_trait::async_trait]
+impl MigrationCommand for UnapplyMigrationCommand {
     type Input = UnapplyMigrationInput;
     type Output = UnapplyMigrationOutput;
 
-    fn new(input: &'a Self::Input) -> Box<Self> {
+    fn new(input: Self::Input) -> Box<Self> {
         Box::new(UnapplyMigrationCommand { input })
     }
 
-    fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
+    async fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
     where
         C: MigrationConnector<DatabaseMigration = D>,
         D: DatabaseMigrationMarker + 'static,

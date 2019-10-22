@@ -1,13 +1,13 @@
 use super::{GenericApi, MigrationApi};
 use crate::commands::*;
-use futures::{
+use futures01::{
     future::{err, lazy, ok, poll_fn},
     Future,
 };
 use jsonrpc_core;
 use jsonrpc_core::types::error::Error as JsonRpcError;
 use jsonrpc_core::IoHandler;
-use jsonrpc_core::*;
+use jsonrpc_core::Params;
 use jsonrpc_stdio_server::ServerBuilder;
 use sql_migration_connector::SqlMigrationConnector;
 use std::{io, sync::Arc};
@@ -145,47 +145,47 @@ impl RpcApi {
         let response_json = match cmd {
             RpcCommand::InferMigrationSteps => {
                 let input: InferMigrationStepsInput = params.clone().parse()?;
-                let result = executor.infer_migration_steps(&input)?;
+                let result = executor.infer_migration_steps(input)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }
             RpcCommand::ListMigrations => {
-                let result = executor.list_migrations(&serde_json::Value::Null)?;
+                let result = executor.list_migrations(serde_json::Value::Null)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }
             RpcCommand::MigrationProgress => {
                 let input: MigrationProgressInput = params.clone().parse()?;
-                let result = executor.migration_progress(&input)?;
+                let result = executor.migration_progress(input)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }
             RpcCommand::ApplyMigration => {
                 let input: ApplyMigrationInput = params.clone().parse()?;
-                let result = executor.apply_migration(&input)?;
+                let result = executor.apply_migration(input)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }
             RpcCommand::UnapplyMigration => {
                 let input: UnapplyMigrationInput = params.clone().parse()?;
-                let result = executor.unapply_migration(&input)?;
+                let result = executor.unapply_migration(input)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }
             RpcCommand::Reset => {
-                let result = executor.reset(&serde_json::Value::Null)?;
+                let result = executor.reset(serde_json::Value::Null)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }
             RpcCommand::CalculateDatamodel => {
                 let input: CalculateDatamodelInput = params.clone().parse()?;
-                let result = executor.calculate_datamodel(&input)?;
+                let result = executor.calculate_datamodel(input)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }
             RpcCommand::CalculateDatabaseSteps => {
                 let input: CalculateDatabaseStepsInput = params.clone().parse()?;
-                let result = executor.calculate_database_steps(&input)?;
+                let result = executor.calculate_database_steps(input)?;
 
                 serde_json::to_value(result).expect("Rendering of RPC response failed")
             }

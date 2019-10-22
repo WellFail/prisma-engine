@@ -50,7 +50,7 @@ impl InferOutput {
 }
 
 pub fn run_infer_command(api: &dyn GenericApi, input: InferMigrationStepsInput) -> InferOutput {
-    let output = api.infer_migration_steps(&input).expect("InferMigration failed");
+    let output = api.infer_migration_steps(input).expect("InferMigration failed");
 
     assert!(
         output.general_errors.is_empty(),
@@ -72,7 +72,7 @@ pub fn apply_migration(
         force: None,
     };
 
-    let migration_output = dbg!(api.apply_migration(&input)).expect("ApplyMigration failed");
+    let migration_output = dbg!(api.apply_migration(input)).expect("ApplyMigration failed");
 
     assert!(
         migration_output.general_errors.is_empty(),
@@ -96,7 +96,7 @@ pub struct UnapplyOutput {
 
 pub fn unapply_migration(test_setup: &TestSetup, api: &dyn GenericApi) -> UnapplyOutput {
     let input = UnapplyMigrationInput {};
-    let output = api.unapply_migration(&input).unwrap();
+    let output = api.unapply_migration(input).unwrap();
 
     let sql_schema = introspect_database(test_setup, api);
 

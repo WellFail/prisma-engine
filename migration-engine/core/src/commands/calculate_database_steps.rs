@@ -6,19 +6,20 @@ use log::*;
 use migration_connector::*;
 use serde::Deserialize;
 
-pub struct CalculateDatabaseStepsCommand<'a> {
-    input: &'a CalculateDatabaseStepsInput,
+pub struct CalculateDatabaseStepsCommand {
+    input: CalculateDatabaseStepsInput,
 }
 
-impl<'a> MigrationCommand<'a> for CalculateDatabaseStepsCommand<'a> {
+#[async_trait::async_trait]
+impl MigrationCommand for CalculateDatabaseStepsCommand {
     type Input = CalculateDatabaseStepsInput;
     type Output = MigrationStepsResultOutput;
 
-    fn new(input: &'a Self::Input) -> Box<Self> {
+    fn new(input: Self::Input) -> Box<Self> {
         Box::new(CalculateDatabaseStepsCommand { input })
     }
 
-    fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
+    async fn execute<C, D>(&self, engine: &MigrationEngine<C, D>) -> CommandResult<Self::Output>
     where
         C: MigrationConnector<DatabaseMigration = D>,
         D: DatabaseMigrationMarker + Send + Sync + 'static,
