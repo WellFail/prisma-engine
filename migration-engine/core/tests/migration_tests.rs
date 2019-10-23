@@ -1074,6 +1074,18 @@ fn index_renaming_must_work() {
     });
 }
 
+#[test_each_connector(only = "me")]
+async fn testtest() {
+
+}
+
+#[test_each_connector]
+async fn testtest() {
+
+}
+
+
+
 #[test]
 fn index_renaming_must_work_when_renaming_to_default() {
     test_each_connector(|test_setup, api| {
