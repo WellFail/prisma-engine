@@ -1,5 +1,5 @@
-use prisma_models::prelude::{GraphqlId, SingleRecord, ModelRef};
-use crate::{filter::RecordFinder, error::ConnectorError};
+use crate::{error::ConnectorError, filter::RecordFinder};
+use prisma_models::prelude::{GraphqlId, ModelRef, SingleRecord};
 
 #[derive(Debug, Clone)]
 pub enum Identifier {

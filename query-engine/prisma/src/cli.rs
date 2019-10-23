@@ -1,4 +1,7 @@
-use crate::{data_model_loader::{load_data_model_components, load_configuration}, dmmf, PrismaResult};
+use crate::{
+    data_model_loader::{load_configuration, load_data_model_components},
+    dmmf, PrismaResult,
+};
 use clap::ArgMatches;
 use core::{
     schema::{QuerySchemaBuilder, QuerySchemaRef, SupportedCapabilities},

@@ -82,7 +82,7 @@ impl DirectiveValidator<dml::Field> for RelationDirectiveValidator {
             }
 
             if !args.is_empty() {
-                return Ok(Some(ast::Directive::new(self.directive_name(), args)))
+                return Ok(Some(ast::Directive::new(self.directive_name(), args)));
             }
         }
 

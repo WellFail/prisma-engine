@@ -11,12 +11,7 @@ pub trait Functional {
     fn apply(&self, values: &[ValueValidator], span: ast::Span) -> Result<MaybeExpression, ValidationError>;
 
     /// Internal: Shorthand to check the count of arguments, and raise an error if applicable.
-    fn check_arg_count(
-        &self,
-        values: &[ValueValidator],
-        count: usize,
-        span: ast::Span,
-    ) -> Result<(), ValidationError> {
+    fn check_arg_count(&self, values: &[ValueValidator], count: usize, span: ast::Span) -> Result<(), ValidationError> {
         if values.len() == count {
             Ok(())
         } else {

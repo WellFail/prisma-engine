@@ -42,7 +42,9 @@ where
         conn.find_id(record_finder).await?;
     };
 
-    let id = conn.find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder).await?;
+    let id = conn
+        .find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder)
+        .await?;
     let record_finder = RecordFinder::from((relation_field.related_model().fields().id(), id));
 
     execute(conn, &record_finder, non_list_args, list_args).await

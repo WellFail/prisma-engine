@@ -123,8 +123,6 @@ impl From<SqlError> for ConnectorError {
     }
 }
 
-
-
 impl From<prisma_query::error::Error> for SqlError {
     fn from(e: prisma_query::error::Error) -> Self {
         match e {
@@ -155,7 +153,7 @@ impl From<prisma_query::error::Error> for SqlError {
             e @ prisma_query::error::Error::ResultIndexOutOfBounds { .. } => Self::QueryError(e.into()),
             e @ prisma_query::error::Error::ResultTypeMismatch { .. } => Self::QueryError(e.into()),
             e @ prisma_query::error::Error::DatabaseUrlIsInvalid { .. } => Self::ConnectionError(e.into()),
-            e @ prisma_query::error::Error::DatabaseAlreadyExists { .. } => Self::ConnectionError(e.into())
+            e @ prisma_query::error::Error::DatabaseAlreadyExists { .. } => Self::ConnectionError(e.into()),
         }
     }
 }

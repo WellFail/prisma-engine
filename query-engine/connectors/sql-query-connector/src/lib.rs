@@ -17,13 +17,13 @@ mod row;
 mod transactional;
 
 use filter_conversion::*;
+use futures::future::{BoxFuture, FutureExt};
 use raw_query::*;
 use row::*;
-use futures::future::{BoxFuture, FutureExt};
 use std::{
     future::Future,
     pin::Pin,
-    task::{Poll, Context},
+    task::{Context, Poll},
 };
 
 pub use database::*;
@@ -32,10 +32,9 @@ pub use transactional::*;
 
 type Result<T> = std::result::Result<T, error::SqlError>;
 
-pub struct SQLIO<'a, T>(BoxFuture<'a, crate::Result<T>>);
+pub struct IO<'a, T>(BoxFuture<'a, crate::Result<T>>);
 
-impl<'a, T> SQLIO<'a, T>
-{
+impl<'a, T> IO<'a, T> {
     pub fn new<F>(inner: F) -> Self
     where
         F: Future<Output = crate::Result<T>> + Send + 'a,
@@ -44,8 +43,7 @@ impl<'a, T> SQLIO<'a, T>
     }
 }
 
-impl<'a, T> Future for SQLIO<'a, T>
-{
+impl<'a, T> Future for IO<'a, T> {
     type Output = crate::Result<T>;
 
     fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {

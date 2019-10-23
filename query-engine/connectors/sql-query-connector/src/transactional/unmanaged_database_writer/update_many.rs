@@ -52,7 +52,9 @@ pub async fn execute_nested<S>(
 where
     S: AsRef<str>,
 {
-    let ids = conn.filter_ids_by_parents(Arc::clone(&relation_field), vec![parent_id], filter.clone()).await?;
+    let ids = conn
+        .filter_ids_by_parents(Arc::clone(&relation_field), vec![parent_id], filter.clone())
+        .await?;
     let count = ids.len();
 
     if count == 0 {

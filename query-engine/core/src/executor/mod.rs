@@ -10,9 +10,9 @@ use crate::{
     response_ir::{Response, ResultIrBuilder},
     CoreError, CoreResult, QueryPair, QuerySchemaRef, ResultPair, ResultResolutionStrategy,
 };
-use prisma_models::ModelRef;
-use futures::future::{BoxFuture, FutureExt};
 use connector::{ModelExtractor, Query, ReadQuery, WriteQuery};
+use futures::future::{BoxFuture, FutureExt};
+use prisma_models::ModelRef;
 
 /// Central query executor and main entry point into the query core.
 pub struct QueryExecutor {
@@ -27,7 +27,11 @@ pub struct QueryExecutor {
 // - ReadQueryResult should probably just be QueryResult
 // - This is all temporary code until the larger query execution overhaul.
 impl QueryExecutor {
-    pub fn new(primary_connector: &'static str, read_executor: ReadQueryExecutor, write_executor: WriteQueryExecutor) -> Self {
+    pub fn new(
+        primary_connector: &'static str,
+        read_executor: ReadQueryExecutor,
+        write_executor: WriteQueryExecutor,
+    ) -> Self {
         QueryExecutor {
             primary_connector,
             read_executor,
@@ -75,7 +79,7 @@ impl QueryExecutor {
 
         match query {
             Query::Read(read) => self.execute_read(read, strategy).boxed(),
-            Query::Write(write) => self.execute_write(write, strategy, model_opt)
+            Query::Write(write) => self.execute_write(write, strategy, model_opt),
         }
     }
 
@@ -92,47 +96,45 @@ impl QueryExecutor {
         &'a self,
         write: WriteQuery,
         strategy: ResultResolutionStrategy,
-        model_opt: Option<ModelRef>
-    ) -> BoxFuture<'a, CoreResult<ResultPair>>
-    {
+        model_opt: Option<ModelRef>,
+    ) -> BoxFuture<'a, CoreResult<ResultPair>> {
         async move {
             match strategy {
                 ResultResolutionStrategy::Serialize(typ) => {
                     let result = self.write_executor.execute(write).await?;
 
                     Ok(ResultPair::Write(result, typ))
-                },
+                }
                 ResultResolutionStrategy::Dependent(dependent_pair) => match model_opt {
                     Some(model) => {
                         let result = self.execute_dependent(write, *dependent_pair, model).await?;
 
                         Ok(result)
-                    },
+                    }
                     None => Err(CoreError::ConversionError(
                         "Model required for dependent query execution".into(),
                     )),
                 },
             }
-        }.boxed()
+        }
+            .boxed()
     }
 
     fn execute_dependent<'a>(
         &'a self,
         write: WriteQuery,
         dependent_pair: QueryPair,
-        model: ModelRef
-    ) -> BoxFuture<'a, CoreResult<ResultPair>>
-    {
+        model: ModelRef,
+    ) -> BoxFuture<'a, CoreResult<ResultPair>> {
         match dependent_pair {
-            (Query::Read(ReadQuery::RecordQuery(mut rq)), strategy) => {
-                async move {
-                    let result = self.write_executor.execute(write).await?;
-                    rq.record_finder = Some(result.result.to_record_finder(model)?);
+            (Query::Read(ReadQuery::RecordQuery(mut rq)), strategy) => async move {
+                let result = self.write_executor.execute(write).await?;
+                rq.record_finder = Some(result.result.to_record_finder(model)?);
 
-                    let dependent_pair = (Query::Read(ReadQuery::RecordQuery(rq)), strategy);
-                    Ok(self.execute_query(dependent_pair).await?)
-                }.boxed()
+                let dependent_pair = (Query::Read(ReadQuery::RecordQuery(rq)), strategy);
+                Ok(self.execute_query(dependent_pair).await?)
             }
+                .boxed(),
             _ => unreachable!(), // Invariant for now
         }
     }

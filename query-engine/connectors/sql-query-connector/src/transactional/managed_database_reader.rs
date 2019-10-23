@@ -5,11 +5,10 @@ use crate::{
     Transactional,
 };
 
-use connector_interface::{self, error::ConnectorError, filter::RecordFinder, *};
+use connector_interface::{self as iface, error::ConnectorError, filter::RecordFinder, *};
 use itertools::Itertools;
 use prisma_models::*;
 use std::convert::TryFrom;
-use futures::future::{BoxFuture, FutureExt};
 
 struct ScalarListElement {
     record_id: GraphqlId,
@@ -24,8 +23,8 @@ where
         &'a self,
         record_finder: &'a RecordFinder,
         selected_fields: &'a SelectedFields,
-    ) -> BoxFuture<'a, connector_interface::Result<Option<SingleRecord>>> {
-        async move {
+    ) -> iface::IO<'a, Option<SingleRecord>> {
+        iface::IO::new(async move {
             let db_name = &record_finder.field.model().internal_data_model().db_name;
             let query = ReadQueryBuilder::get_records(record_finder.field.model(), selected_fields, record_finder);
 
@@ -43,7 +42,7 @@ where
                 record: Record::from(r),
                 field_names,
             }))
-        }.boxed()
+        })
     }
 
     fn get_many_records<'a>(
@@ -51,8 +50,8 @@ where
         model: ModelRef,
         query_arguments: QueryArguments,
         selected_fields: &'a SelectedFields,
-    ) -> BoxFuture<'a, connector_interface::Result<ManyRecords>> {
-        async move {
+    ) -> iface::IO<'a, ManyRecords> {
+        iface::IO::new(async move {
             let db_name = &model.internal_data_model().db_name;
             let field_names = selected_fields.names();
 
@@ -64,7 +63,7 @@ where
             let records = records.into_iter().map(Record::from).collect();
 
             Ok(ManyRecords { records, field_names })
-        }.boxed()
+        })
     }
 
     fn get_related_records<'a>(
@@ -73,15 +72,20 @@ where
         from_record_ids: &'a [GraphqlId],
         query_arguments: QueryArguments,
         selected_fields: &'a SelectedFields,
-    ) -> BoxFuture<'a, connector_interface::Result<ManyRecords>> {
-        async move {
+    ) -> iface::IO<'a, ManyRecords> {
+        iface::IO::new(async move {
             let db_name = &from_field.model().internal_data_model().db_name;
             let idents = selected_fields.type_identifiers();
             let field_names = selected_fields.names();
 
             let query = {
                 let is_with_pagination = query_arguments.is_with_pagination();
-                let base = ManyRelatedRecordsBaseQuery::new(from_field, from_record_ids.to_vec(), query_arguments, selected_fields.clone());
+                let base = ManyRelatedRecordsBaseQuery::new(
+                    from_field,
+                    from_record_ids.to_vec(),
+                    query_arguments,
+                    selected_fields.clone(),
+                );
 
                 if is_with_pagination {
                     T::ManyRelatedRecordsBuilder::with_pagination(base)
@@ -113,41 +117,43 @@ where
                 records: records?,
                 field_names,
             })
-        }.boxed()
+        })
     }
 
-    fn count_by_model<'a>(&'a self, model: ModelRef, query_arguments: QueryArguments) -> BoxFuture<'a, connector_interface::Result<usize>> {
-        async move {
+    fn count_by_model(&self, model: ModelRef, query_arguments: QueryArguments) -> iface::IO<usize> {
+        iface::IO::new(async move {
             let db_name = &model.internal_data_model().db_name;
             let query = ReadQueryBuilder::count_by_model(model, query_arguments);
             let conn = self.executor.get_connection(db_name).await?;
 
             Ok(conn.find_int(query).await? as usize)
-        }.boxed()
+        })
     }
 
-    fn count_by_table<'a>(&'a self, database: &'a str, table: &'a str) -> BoxFuture<'a, connector_interface::Result<usize>> {
-        async move {
+    fn count_by_table<'a>(&'a self, database: &'a str, table: &'a str) -> iface::IO<'a, usize> {
+        iface::IO::new(async move {
             let query = ReadQueryBuilder::count_by_table(database, table);
             let conn = self.executor.get_connection(database).await?;
 
             Ok(conn.find_int(query).await? as usize)
-        }.boxed()
+        })
     }
 
-    fn get_scalar_list_values_by_record_ids<'a>(
-        &'a self,
+    fn get_scalar_list_values_by_record_ids(
+        &self,
         list_field: ScalarFieldRef,
         record_ids: Vec<GraphqlId>,
-    ) -> BoxFuture<'a, connector_interface::Result<Vec<ScalarListValues>>> {
-        async move {
+    ) -> iface::IO<Vec<ScalarListValues>> {
+        iface::IO::new(async move {
             let db_name = &list_field.model().internal_data_model().db_name;
             let type_identifier = list_field.type_identifier;
 
             let query = ReadQueryBuilder::get_scalar_list_values_by_record_ids(list_field, record_ids);
             let conn = self.executor.get_connection(db_name).await?;
 
-            let rows = conn.filter(query.into(), &[TypeIdentifier::GraphQLID, type_identifier]).await?;
+            let rows = conn
+                .filter(query.into(), &[TypeIdentifier::GraphQLID, type_identifier])
+                .await?;
 
             let results: connector_interface::Result<Vec<ScalarListElement>> = rows
                 .into_iter()
@@ -176,6 +182,6 @@ where
             }
 
             Ok(list_values)
-        }.boxed()
+        })
     }
 }

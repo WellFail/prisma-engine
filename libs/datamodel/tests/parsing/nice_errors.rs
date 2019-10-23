@@ -94,10 +94,7 @@ fn nice_error_missing_directive_name() {
 
     let error = parse_error(dml);
 
-    error.assert_is(ValidationError::new_parser_error(
-        &vec!["directive"],
-        Span::new(43, 43),
-    ));
+    error.assert_is(ValidationError::new_parser_error(&vec!["directive"], Span::new(43, 43)));
 }
 
 // TODO: This case is not nice because the "{ }" belong to the declaration.

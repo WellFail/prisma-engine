@@ -16,10 +16,13 @@ pub async fn execute(conn: &dyn Transaction, record_finder: &RecordFinder) -> cr
     let record = conn.find_record(record_finder).await?;
     let id = record.collect_id(&model.fields().id().name).unwrap();
 
-    DeleteActions::check_relation_violations(Arc::clone(&model), &[&id], |select| async move {
-        let ids = conn.select_ids(select).await?;
-        Ok(ids.into_iter().next())
-    }).await?;
+    DeleteActions::check_relation_violations(Arc::clone(&model), &[&id], |select| {
+        async move {
+            let ids = conn.select_ids(select).await?;
+            Ok(ids.into_iter().next())
+        }
+    })
+    .await?;
 
     for delete in WriteQueryBuilder::delete_many(model, &[&id]) {
         conn.delete(delete).await?;
@@ -48,7 +51,9 @@ pub async fn execute_nested(
         conn.find_id(record_finder).await?;
     };
 
-    let find = conn.find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder).await;
+    let find = conn
+        .find_id_by_parent(Arc::clone(&relation_field), parent_id, record_finder)
+        .await;
 
     let child_id = find.map_err(|e| match e {
         SqlError::RecordsNotConnected {
@@ -79,10 +84,13 @@ pub async fn execute_nested(
 
     let related_model = relation_field.related_model();
 
-    DeleteActions::check_relation_violations(related_model, &[&child_id; 1], |select| async move {
-        let ids = conn.select_ids(select).await?;
-        Ok(ids.into_iter().next())
-    }).await?;
+    DeleteActions::check_relation_violations(related_model, &[&child_id; 1], |select| {
+        async move {
+            let ids = conn.select_ids(select).await?;
+            Ok(ids.into_iter().next())
+        }
+    })
+    .await?;
 
     for delete in WriteQueryBuilder::delete_many(relation_field.related_model(), &[&child_id]) {
         conn.delete(delete).await?;

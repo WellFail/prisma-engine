@@ -3,10 +3,10 @@ pub mod graphql;
 pub use core::QuerySchemaRenderer;
 pub use graphql::{GraphQlBody, GraphQlRequestHandler};
 
-use crate::{context::PrismaContext};
+use crate::context::PrismaContext;
+use futures::future::BoxFuture;
 use serde_json;
 use std::{collections::HashMap, fmt::Debug};
-use futures::future::BoxFuture;
 
 pub trait RequestHandler {
     type Body: Debug;

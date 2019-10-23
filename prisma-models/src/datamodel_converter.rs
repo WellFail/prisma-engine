@@ -66,10 +66,12 @@ impl<'a> DatamodelConverter<'a> {
                         .relations
                         .iter()
                         .find(|r| r.is_for_model_and_field(model, field))
-                        .unwrap_or_else(|| panic!(
-                            "Did not find a relation for those for model {} and field {}",
-                            model.name, field.name
-                        ));
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Did not find a relation for those for model {} and field {}",
+                                model.name, field.name
+                            )
+                        });
 
                     FieldTemplate::Relation(RelationFieldTemplate {
                         name: field.name.clone(),
@@ -121,10 +123,7 @@ impl<'a> DatamodelConverter<'a> {
             for field in model.fields() {
                 if let dml::FieldType::Relation(relation_info) = &field.field_type {
                     let dml::RelationInfo {
-                        to,
-                        to_fields,
-                        name,
-                        ..
+                        to, to_fields, name, ..
                     } = relation_info;
 
                     let related_model = datamodel
@@ -146,10 +145,12 @@ impl<'a> DatamodelConverter<'a> {
                             }
                             _ => false,
                         })
-                        .unwrap_or_else(|| panic!(
-                            "Related model for model {} and field {} not found",
-                            model.name, field.name
-                        ))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Related model for model {} and field {} not found",
+                                model.name, field.name
+                            )
+                        })
                         .clone();
 
                     let related_field_info = match &related_field.field_type {
@@ -344,7 +345,9 @@ impl DatamodelFieldExtensions for dml::Field {
                     _ => TypeIdentifier::String,
                 },
             },
-            dml::FieldType::ConnectorSpecific { .. } => unimplemented!("Connector Specific types are not supported here yet"),
+            dml::FieldType::ConnectorSpecific { .. } => {
+                unimplemented!("Connector Specific types are not supported here yet")
+            }
         }
     }
 

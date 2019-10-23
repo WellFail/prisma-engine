@@ -91,7 +91,8 @@ pub async fn disconnect(
             let ids = conn.select_ids(select).await?;
             check(ids.into_iter().next().is_some())?;
 
-            conn.execute(actions.removal_by_parent_and_child(parent_id, &child_id)).await?;
+            conn.execute(actions.removal_by_parent_and_child(parent_id, &child_id))
+                .await?;
         }
     }
 

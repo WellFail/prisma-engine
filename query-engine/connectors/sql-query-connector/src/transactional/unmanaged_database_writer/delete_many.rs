@@ -19,10 +19,13 @@ pub async fn execute(conn: &dyn Transaction, model: ModelRef, filter: &Filter) -
         return Ok(count);
     }
 
-    DeleteActions::check_relation_violations(Arc::clone(&model), ids.as_slice(), |select| async move {
-        let ids = conn.select_ids(select).await?;
-        Ok(ids.into_iter().next())
-    }).await?;
+    DeleteActions::check_relation_violations(Arc::clone(&model), ids.as_slice(), |select| {
+        async move {
+            let ids = conn.select_ids(select).await?;
+            Ok(ids.into_iter().next())
+        }
+    })
+    .await?;
 
     for delete in WriteQueryBuilder::delete_many(model, ids.as_slice()) {
         conn.delete(delete).await?;
@@ -40,7 +43,9 @@ pub async fn execute_nested(
     filter: &Option<Filter>,
     relation_field: RelationFieldRef,
 ) -> crate::Result<usize> {
-    let ids = conn.filter_ids_by_parents(Arc::clone(&relation_field), vec![parent_id], filter.clone()).await?;
+    let ids = conn
+        .filter_ids_by_parents(Arc::clone(&relation_field), vec![parent_id], filter.clone())
+        .await?;
     let count = ids.len();
 
     if count == 0 {
@@ -50,10 +55,13 @@ pub async fn execute_nested(
     let ids: Vec<&GraphqlId> = ids.iter().map(|id| &*id).collect();
     let model = relation_field.model();
 
-    DeleteActions::check_relation_violations(model, ids.as_slice(), |select| async move {
-        let ids = conn.select_ids(select).await?;
-        Ok(ids.into_iter().next())
-    }).await?;
+    DeleteActions::check_relation_violations(model, ids.as_slice(), |select| {
+        async move {
+            let ids = conn.select_ids(select).await?;
+            Ok(ids.into_iter().next())
+        }
+    })
+    .await?;
 
     for delete in WriteQueryBuilder::delete_many(relation_field.related_model(), ids.as_slice()) {
         conn.delete(delete).await?;

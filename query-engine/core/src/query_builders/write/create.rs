@@ -25,7 +25,8 @@ impl Builder<WriteQuery> for CreateBuilder {
         let data_argument = self.field.arguments.lookup("data").unwrap();
         let data_map: ParsedInputMap = data_argument.value.try_into()?;
 
-        Self::build_from(model, data_map).map(|cr| WriteQuery::Root(name, alias, RootWriteQuery::CreateRecord(Box::new(cr))))
+        Self::build_from(model, data_map)
+            .map(|cr| WriteQuery::Root(name, alias, RootWriteQuery::CreateRecord(Box::new(cr))))
     }
 }
 

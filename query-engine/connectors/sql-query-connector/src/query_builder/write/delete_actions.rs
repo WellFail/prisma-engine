@@ -15,7 +15,11 @@ impl DeleteActions {
     /// connector, giving the connector the possibility to return an optional
     /// `GraphqlID` from the database, such as trying to read a row from the
     /// `SELECT`.
-    pub async fn check_relation_violations<'a, F, U>(model: ModelRef, ids: &'a [&'a GraphqlId], f: F) -> crate::Result<()>
+    pub async fn check_relation_violations<'a, F, U>(
+        model: ModelRef,
+        ids: &'a [&'a GraphqlId],
+        f: F,
+    ) -> crate::Result<()>
     where
         F: Fn(Select<'a>) -> U + Send + 'a,
         U: Future<Output = crate::Result<Option<GraphqlId>>> + Send,

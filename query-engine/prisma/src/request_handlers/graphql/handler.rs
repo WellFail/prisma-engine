@@ -1,10 +1,10 @@
 use super::protocol_adapter::GraphQLProtocolAdapter;
 use crate::{context::PrismaContext, serializers::json, PrismaRequest, PrismaResult, RequestHandler};
 use core::response_ir;
+use futures::future::{BoxFuture, FutureExt};
 use graphql_parser as gql;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
-use futures::future::{BoxFuture, FutureExt};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +23,7 @@ impl RequestHandler for GraphQlRequestHandler {
 
     fn handle<'a, S>(&'a self, req: S, ctx: &'a PrismaContext) -> BoxFuture<'a, serde_json::Value>
     where
-        S: Into<PrismaRequest<Self::Body>> + Send + Sync + 'static
+        S: Into<PrismaRequest<Self::Body>> + Send + Sync + 'static,
     {
         async move {
             let responses = match handle_graphql_query(req.into(), ctx).await {
@@ -32,7 +32,8 @@ impl RequestHandler for GraphQlRequestHandler {
             };
 
             json::serialize(responses)
-        }.boxed()
+        }
+            .boxed()
     }
 }
 
@@ -46,11 +47,8 @@ async fn handle_graphql_query(
     let query_doc = GraphQLProtocolAdapter::convert(gql_doc, req.body.operation_name)?;
     let schema = Arc::clone(ctx.query_schema());
 
-    ctx.executor()
-        .execute(query_doc, schema)
-        .await
-        .map_err(|err| {
-            debug!("{}", err);
-            err.into()
-        })
+    ctx.executor().execute(query_doc, schema).await.map_err(|err| {
+        debug!("{}", err);
+        err.into()
+    })
 }

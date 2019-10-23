@@ -30,10 +30,7 @@ impl GraphQLProtocolAdapter {
                 .definitions
                 .into_iter()
                 .find(|def| Self::matches_operation(def, op))
-                .ok_or_else(|| QueryValidationError(format!(
-                    "Operation '{}' does not match any query.",
-                    op
-                )))
+                .ok_or_else(|| QueryValidationError(format!("Operation '{}' does not match any query.", op)))
                 .and_then(|def| Self::convert_definition(def).map(|r| vec![r])),
 
             None => gql_doc

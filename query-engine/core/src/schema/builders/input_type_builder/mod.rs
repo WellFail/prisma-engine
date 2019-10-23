@@ -7,7 +7,9 @@ pub use input_builder_extensions::*;
 pub use update_input_type_extension::*;
 
 use super::*;
-use prisma_models::{InternalDataModelRef, FieldBehaviour, IdStrategy, ModelRef, RelationFieldRef, ScalarFieldRef, TypeIdentifier};
+use prisma_models::{
+    FieldBehaviour, IdStrategy, InternalDataModelRef, ModelRef, RelationFieldRef, ScalarFieldRef, TypeIdentifier,
+};
 use std::sync::{Arc, Weak};
 
 pub trait InputTypeBuilderBase<'a>: CachedBuilder<InputObjectType> + InputBuilderExtensions {

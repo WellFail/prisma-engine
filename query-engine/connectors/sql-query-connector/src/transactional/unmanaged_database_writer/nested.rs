@@ -1,9 +1,9 @@
 use super::{create, delete, delete_many, relation, update, update_many};
 use crate::{error::SqlError, Transaction};
 use connector_interface::write_ast::*;
+use futures::future::{BoxFuture, FutureExt};
 use prisma_models::GraphqlId;
 use std::sync::Arc;
-use futures::future::{BoxFuture, FutureExt};
 
 pub fn execute<'a>(
     conn: &'a dyn Transaction,
@@ -18,7 +18,8 @@ pub fn execute<'a>(
             Arc::clone(&cn.relation_field),
             &cn.non_list_args,
             &cn.list_args,
-        ).await?;
+        )
+        .await?;
 
         execute(conn, &cn.nested_writes, &parent_id).await?;
 
@@ -33,7 +34,8 @@ pub fn execute<'a>(
             Arc::clone(&un.relation_field),
             &un.non_list_args,
             &un.list_args,
-        ).await?;
+        )
+        .await?;
 
         execute(conn, &un.nested_writes, &parent_id).await?;
 
@@ -50,15 +52,19 @@ pub fn execute<'a>(
         }
 
         for upsert_record in nested_write_writes.upserts.iter() {
-            let id_opt = conn.find_id_by_parent(
-                Arc::clone(&upsert_record.relation_field),
-                parent_id,
-                &upsert_record.where_,
-            ).await;
+            let id_opt = conn
+                .find_id_by_parent(
+                    Arc::clone(&upsert_record.relation_field),
+                    parent_id,
+                    &upsert_record.where_,
+                )
+                .await;
 
             match id_opt {
                 Ok(_) => update(conn, parent_id, &upsert_record.update).await?,
-                Err(_e @ SqlError::RecordsNotConnected { .. }) => create(conn, parent_id, &upsert_record.create).await?,
+                Err(_e @ SqlError::RecordsNotConnected { .. }) => {
+                    create(conn, parent_id, &upsert_record.create).await?
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -70,7 +76,8 @@ pub fn execute<'a>(
                 delete_record,
                 &delete_record.where_,
                 Arc::clone(&delete_record.relation_field),
-            ).await?;
+            )
+            .await?;
         }
 
         for connect in nested_write_writes.connects.iter() {
@@ -80,7 +87,8 @@ pub fn execute<'a>(
                 connect,
                 &connect.where_,
                 Arc::clone(&connect.relation_field),
-            ).await?;
+            )
+            .await?;
         }
 
         for set in nested_write_writes.sets.iter() {
@@ -99,7 +107,8 @@ pub fn execute<'a>(
                 Arc::clone(&update_many.relation_field),
                 &update_many.non_list_args,
                 &update_many.list_args,
-            ).await?;
+            )
+            .await?;
         }
 
         for delete_many in nested_write_writes.delete_manys.iter() {
@@ -108,9 +117,11 @@ pub fn execute<'a>(
                 &parent_id,
                 &delete_many.filter,
                 Arc::clone(&delete_many.relation_field),
-            ).await?;
+            )
+            .await?;
         }
 
         Ok(())
-    }.boxed()
+    }
+        .boxed()
 }

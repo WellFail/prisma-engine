@@ -75,10 +75,9 @@ impl StringInterpolator {
                 };
 
                 let expected = match err.variant {
-                    pest::error::ErrorVariant::ParsingError {
-                        positives,
-                        ..
-                    } => crate::ast::parser::get_expected_from_error(&positives),
+                    pest::error::ErrorVariant::ParsingError { positives, .. } => {
+                        crate::ast::parser::get_expected_from_error(&positives)
+                    }
                     _ => panic!("Could not construct parsing error. This should never happend."),
                 };
 

@@ -18,9 +18,9 @@ impl WriteQueryBuilder {
                 args.insert(id_field.name.as_str(), id.clone());
                 Some(id)
             }
-            Some(prisma_value) => Some(
-                GraphqlId::try_from(prisma_value).expect("Could not convert prisma value to graphqlid"),
-            ),
+            Some(prisma_value) => {
+                Some(GraphqlId::try_from(prisma_value).expect("Could not convert prisma value to graphqlid"))
+            }
         };
 
         let fields: Vec<&Field> = model

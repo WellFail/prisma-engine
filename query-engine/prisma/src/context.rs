@@ -78,5 +78,4 @@ impl PrismaContext {
     pub fn executor(&self) -> &QueryExecutor {
         &self.executor
     }
-
 }

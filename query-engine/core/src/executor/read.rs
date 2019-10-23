@@ -1,6 +1,6 @@
 use crate::CoreResult;
+use connector::{self, query_ast::*, result_ast::*, ManagedDatabaseReader, QueryArguments, ScalarListValues};
 use futures::future::{BoxFuture, FutureExt};
-use connector::{self, query_ast::*, result_ast::*, ManagedDatabaseReader, ScalarListValues, QueryArguments};
 use prisma_models::{GraphqlId, ScalarField, SelectedFields};
 use std::sync::Arc;
 
@@ -9,7 +9,11 @@ pub struct ReadQueryExecutor {
 }
 
 impl ReadQueryExecutor {
-    pub fn execute<'a>(&'a self, query: ReadQuery, parent_ids: &'a [GraphqlId]) -> BoxFuture<'a, CoreResult<ReadQueryResult>> {
+    pub fn execute<'a>(
+        &'a self,
+        query: ReadQuery,
+        parent_ids: &'a [GraphqlId],
+    ) -> BoxFuture<'a, CoreResult<ReadQueryResult>> {
         async move {
             match query {
                 ReadQuery::RecordQuery(q) => self.read_one(q).await,
@@ -17,7 +21,8 @@ impl ReadQueryExecutor {
                 ReadQuery::RelatedRecordsQuery(q) => self.read_related(q, parent_ids).await,
                 ReadQuery::AggregateRecordsQuery(q) => self.aggregate(q).await,
             }
-        }.boxed()
+        }
+            .boxed()
     }
 
     /// Queries a single record.
@@ -27,7 +32,8 @@ impl ReadQueryExecutor {
 
             let scalars = self
                 .data_resolver
-                .get_single_record(query.record_finder.as_ref().unwrap(), &selected_fields).await?;
+                .get_single_record(query.record_finder.as_ref().unwrap(), &selected_fields)
+                .await?;
 
             let model = Arc::clone(&query.record_finder.unwrap().field.model());
             let id_field = model.fields().id().name.clone();
@@ -67,7 +73,8 @@ impl ReadQueryExecutor {
                     }),
                 }),
             }
-        }.boxed()
+        }
+            .boxed()
     }
 
     /// Queries a set of records.
@@ -75,9 +82,10 @@ impl ReadQueryExecutor {
         async move {
             let selected_fields = Self::inject_required_fields(query.selected_fields.clone());
 
-            let scalars =
-                self.data_resolver
-                    .get_many_records(Arc::clone(&query.model), query.args.clone(), &selected_fields).await?;
+            let scalars = self
+                .data_resolver
+                .get_many_records(Arc::clone(&query.model), query.args.clone(), &selected_fields)
+                .await?;
 
             let model = Arc::clone(&query.model);
             let id_field = model.fields().id().name.clone();
@@ -103,20 +111,28 @@ impl ReadQueryExecutor {
                     id_field,
                 }),
             })
-        }.boxed()
+        }
+            .boxed()
     }
 
     /// Queries related records for a set of parent IDs.
-    pub fn read_related<'a>(&'a self, query: RelatedRecordsQuery, parent_ids: &'a [GraphqlId]) -> BoxFuture<'a, CoreResult<ReadQueryResult>> {
+    pub fn read_related<'a>(
+        &'a self,
+        query: RelatedRecordsQuery,
+        parent_ids: &'a [GraphqlId],
+    ) -> BoxFuture<'a, CoreResult<ReadQueryResult>> {
         async move {
             let selected_fields = Self::inject_required_fields(query.selected_fields.clone());
 
-            let scalars = self.data_resolver.get_related_records(
-                Arc::clone(&query.parent_field),
-                parent_ids,
-                query.args.clone(),
-                &selected_fields,
-            ).await?;
+            let scalars = self
+                .data_resolver
+                .get_related_records(
+                    Arc::clone(&query.parent_field),
+                    parent_ids,
+                    query.args.clone(),
+                    &selected_fields,
+                )
+                .await?;
 
             let model = Arc::clone(&query.parent_field.related_model());
             let id_field = model.fields().id().name.clone();
@@ -142,11 +158,15 @@ impl ReadQueryExecutor {
                     id_field,
                 }),
             })
-        }.boxed()
+        }
+            .boxed()
     }
 
     pub async fn aggregate(&self, query: AggregateRecordsQuery) -> CoreResult<ReadQueryResult> {
-        let result = self.data_resolver.count_by_model(query.model, QueryArguments::default()).await?;
+        let result = self
+            .data_resolver
+            .count_by_model(query.model, QueryArguments::default())
+            .await?;
 
         Ok(ReadQueryResult {
             name: query.name,

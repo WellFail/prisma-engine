@@ -1,7 +1,7 @@
-use crate::{query_builder::ManyRelatedRecordsWithRowNumber, FromSource, SqlCapabilities, Transaction, Transactional, SQLIO};
+use crate::{query_builder::ManyRelatedRecordsWithRowNumber, FromSource, SqlCapabilities, Transaction, Transactional};
 use datamodel::Source;
 use prisma_query::{
-    connector::{SqliteParams, Queryable},
+    connector::{Queryable, SqliteParams},
     pool::{self, SqliteManager},
 };
 use std::convert::TryFrom;
@@ -16,10 +16,7 @@ impl Sqlite {
     pub fn new(file_path: String) -> crate::Result<Self> {
         let pool = pool::sqlite(&file_path)?;
 
-        Ok(Self {
-            pool,
-            file_path,
-        })
+        Ok(Self { pool, file_path })
     }
 
     pub fn file_path(&self) -> &str {
@@ -43,8 +40,8 @@ impl SqlCapabilities for Sqlite {
 impl Transaction for CheckOut<SqliteManager> {}
 
 impl Transactional for Sqlite {
-    fn get_connection<'a>(&'a self, db: &'a str) -> SQLIO<'a, Box<dyn Transaction>> {
-        SQLIO::new(async move {
+    fn get_connection<'a>(&'a self, db: &'a str) -> crate::IO<'a, Box<dyn Transaction>> {
+        crate::IO::new(async move {
             let mut conn = self.pool.check_out().await?;
 
             conn.attach_database(db)?;

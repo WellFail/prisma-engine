@@ -5,14 +5,14 @@ use crate::{
         graphql::{GraphQLSchemaRenderer, GraphQlBody, GraphQlRequestHandler},
         PrismaRequest, RequestHandler,
     },
-    PrismaResult
+    PrismaResult,
 };
-use serde_json::json;
-use hyper::{Body, Error, Method, Request, Response, Server, StatusCode};
+use core::schema::QuerySchemaRenderer;
+use futures::stream::TryStreamExt;
 use hyper::header;
 use hyper::service::{make_service_fn, service_fn};
-use futures::stream::TryStreamExt;
-use core::schema::QuerySchemaRenderer;
+use hyper::{Body, Error, Method, Request, Response, Server, StatusCode};
+use serde_json::json;
 use std::{sync::Arc, time::Instant};
 
 #[derive(RustEmbed)]
@@ -29,8 +29,7 @@ pub(crate) struct RequestContext {
 pub struct HttpServer;
 
 impl HttpServer {
-    pub async fn run(address: ([u8; 4], u16), legacy_mode: bool) -> PrismaResult<()>
-    {
+    pub async fn run(address: ([u8; 4], u16), legacy_mode: bool) -> PrismaResult<()> {
         let now = Instant::now();
 
         let ctx = Arc::new(RequestContext {
@@ -41,9 +40,7 @@ impl HttpServer {
         let service = make_service_fn(|_| {
             let ctx = ctx.clone();
 
-            async {
-                Ok::<_, Error>(service_fn(move |req| Self::routes(ctx.clone(), req)))
-            }
+            async { Ok::<_, Error>(service_fn(move |req| Self::routes(ctx.clone(), req))) }
         });
 
         let address = address.into();
@@ -57,7 +54,7 @@ impl HttpServer {
         Ok(())
     }
 
-    async fn routes(ctx: Arc<RequestContext>, req: Request<Body>) -> std::result::Result<Response<Body>, Error>  {
+    async fn routes(ctx: Arc<RequestContext>, req: Request<Body>) -> std::result::Result<Response<Body>, Error> {
         let res = match (req.method(), req.uri().path()) {
             (&Method::POST, "/") => {
                 let (parts, chunks) = req.into_parts();
@@ -83,7 +80,7 @@ impl HttpServer {
                         bad_request
                     }
                 }
-            },
+            }
 
             (&Method::GET, "/") => Self::playground_handler(),
             (&Method::GET, "/status") => Self::status_handler(),
@@ -149,10 +146,7 @@ impl HttpServer {
     /// Renders the Data Model Meta Format.
     /// Only callable if prisma was initialized using a v2 data model.
     fn dmmf_handler(cx: Arc<RequestContext>) -> Response<Body> {
-        let dmmf = dmmf::render_dmmf(
-            cx.context.datamodel(),
-            Arc::clone(cx.context.query_schema()),
-        );
+        let dmmf = dmmf::render_dmmf(cx.context.datamodel(), Arc::clone(cx.context.query_schema()));
 
         let bytes = serde_json::to_vec(&dmmf).unwrap();
 

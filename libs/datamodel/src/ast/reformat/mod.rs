@@ -386,7 +386,7 @@ impl Reformatter {
     pub fn get_identifier(token: &Token) -> String {
         for current in token.clone().into_inner() {
             if let Rule::identifier = current.as_rule() {
-                return current.as_str().to_string()
+                return current.as_str().to_string();
             }
         }
 
