@@ -113,7 +113,7 @@ fn update_must_work() {
         params.finished_at = Some(Migration::timestamp_without_nanos());
         params.new_name = "my_new_migration_name".to_string();
 
-        persistence.update(&params);
+        persistence.update(&params).wait();
 
         let loaded = persistence.last().wait().unwrap();
         assert_eq!(loaded.status, params.status);

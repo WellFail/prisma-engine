@@ -2,10 +2,13 @@ use crate::*;
 use std::sync::Arc;
 
 /// Apply and unapply migrations on the connector's database.
-pub trait MigrationApplier<T> {
-    fn apply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()>;
+#[async_trait::async_trait]
+pub trait MigrationApplier<T>: Send + Sync
+where T: Send + Sync + 'static
+{
+    async fn apply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()>;
 
-    fn unapply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()>;
+    async fn unapply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()>;
 }
 
 pub struct MigrationApplierImpl<T> {
@@ -13,35 +16,37 @@ pub struct MigrationApplierImpl<T> {
     pub step_applier: Arc<dyn DatabaseMigrationStepApplier<T>>,
 }
 
-impl<T: 'static> MigrationApplier<T> for MigrationApplierImpl<T> {
-    fn apply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()> {
+#[async_trait::async_trait]
+impl<T> MigrationApplier<T> for MigrationApplierImpl<T>
+where T: Send + Sync + 'static {
+    async fn apply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()> {
         assert_eq!(migration.status, MigrationStatus::Pending); // what other states are valid here?
         let mut migration_updates = migration.update_params();
         migration_updates.status = MigrationStatus::MigrationInProgress;
-        self.migration_persistence.update(&migration_updates);
+        self.migration_persistence.update(&migration_updates).await;
 
         let apply_result = self.go_forward(&mut migration_updates, database_migration);
 
         match apply_result {
             Ok(()) => {
                 migration_updates.mark_as_finished();
-                self.migration_persistence.update(&migration_updates);
+                self.migration_persistence.update(&migration_updates).await;
                 Ok(())
             }
             Err(err) => {
                 migration_updates.status = MigrationStatus::MigrationFailure;
                 migration_updates.errors = vec![format!("{:?}", err)];
-                self.migration_persistence.update(&migration_updates);
+                self.migration_persistence.update(&migration_updates).await;
                 Err(err)
             }
         }
     }
 
-    fn unapply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()> {
+    async fn unapply(&self, migration: &Migration, database_migration: &T) -> ConnectorResult<()> {
         assert_eq!(migration.status, MigrationStatus::MigrationSuccess); // what other states are valid here?
         let mut migration_updates = migration.update_params();
         migration_updates.status = MigrationStatus::RollingBack;
-        self.migration_persistence.update(&migration_updates);
+        self.migration_persistence.update(&migration_updates).await;
 
         let unapply_result = self.go_backward(&mut migration_updates, database_migration);
 
@@ -54,7 +59,7 @@ impl<T: 'static> MigrationApplier<T> for MigrationApplierImpl<T> {
             Err(err) => {
                 migration_updates.status = MigrationStatus::RollbackFailure;
                 migration_updates.errors = vec![format!("{:?}", err)];
-                self.migration_persistence.update(&migration_updates);
+                self.migration_persistence.update(&migration_updates).await;
                 Err(err)
             }
         }

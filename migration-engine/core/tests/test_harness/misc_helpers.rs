@@ -216,6 +216,7 @@ where
     let conn = f(url).unwrap();
 
     conn.execute_raw("", &create_stmt(db_name), &[]).unwrap();
+    dbg!("database created");
 }
 
 fn with_database<F, T, S>(url: Url, default_name: &str, root_path: &str, create_stmt: S, f: Rc<F>) -> T

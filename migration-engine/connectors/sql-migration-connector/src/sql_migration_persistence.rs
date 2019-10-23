@@ -42,7 +42,7 @@ impl MigrationPersistence for SqlMigrationPersistence {
 
     async fn reset(&self) {
         let sql_str = format!(r#"DELETE FROM "{}"."_Migration";"#, self.schema_name); // TODO: this is not vendor agnostic yet
-        let _ = self.connection.query_raw(&self.schema_name, &sql_str, &[]);
+        self.connection.query_raw(&self.schema_name, &sql_str, &[]).ok();
 
         // TODO: this is the wrong place to do that
         match self.sql_family {
@@ -50,17 +50,17 @@ impl MigrationPersistence for SqlMigrationPersistence {
                 let sql_str = format!(r#"DROP SCHEMA "{}" CASCADE;"#, self.schema_name);
                 debug!("{}", sql_str);
 
-                let _ = self.connection.query_raw(&self.schema_name, &sql_str, &[]);
+                self.connection.query_raw(&self.schema_name, &sql_str, &[]).ok();
             }
             SqlFamily::Sqlite => {
                 if let Some(ref file_path) = self.file_path {
-                    let _ = std::fs::remove_file(file_path); // ignore potential errors
+                    std::fs::remove_file(file_path).ok(); // ignore potential errors
                 }
             }
             SqlFamily::Mysql => {
                 let sql_str = format!(r#"DROP SCHEMA `{}`;"#, self.schema_name);
                 debug!("{}", sql_str);
-                let _ = self.connection.query_raw(&self.schema_name, &sql_str, &[]);
+                self.connection.query_raw(&self.schema_name, &sql_str, &[]).ok();
             }
         }
     }
@@ -152,7 +152,7 @@ impl MigrationPersistence for SqlMigrationPersistence {
                     .and(REVISION_COLUMN.equals(params.revision)),
             );
 
-        let _ = self.connection.query(&self.schema_name, query.into()).unwrap();
+        self.connection.query(&self.schema_name, query.into()).unwrap();
     }
 }
 

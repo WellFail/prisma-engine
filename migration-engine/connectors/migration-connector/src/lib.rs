@@ -69,7 +69,7 @@ pub trait MigrationConnector: Send + Sync + 'static {
     }
 }
 
-pub trait DatabaseMigrationMarker: Debug {
+pub trait DatabaseMigrationMarker: Debug + Send + Sync {
     fn serialize(&self) -> serde_json::Value;
 }
 

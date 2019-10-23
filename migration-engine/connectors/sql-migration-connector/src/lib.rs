@@ -232,13 +232,13 @@ impl MigrationConnector for SqlMigrationConnector {
             }
         }
 
-        self.migration_persistence.init();
+        self.migration_persistence.init().await;
 
         Ok(())
     }
 
     async fn reset(&self) -> ConnectorResult<()> {
-        self.migration_persistence.reset();
+        self.migration_persistence.reset().await;
         Ok(())
     }
 
